@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useBannerStore } from '../store/bannerStore';
-import { Save, Clock, Edit2, Check, Download, FolderOpen, LayoutGrid } from 'lucide-react';
+import { Save, Clock, Edit2, Check, Download, LayoutGrid } from 'lucide-react';
 
 export const SaveBar: React.FC = () => {
   const projectName = useBannerStore((state) => state.projectName);
@@ -10,24 +10,27 @@ export const SaveBar: React.FC = () => {
   const loadFromLocalStorage = useBannerStore((state) => state.loadFromLocalStorage);
   const saveProject = useBannerStore((state) => state.saveProject);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
-  
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(projectName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
   // Load from localStorage on mount - show gallery if multiple projects exist
   useEffect(() => {
-    const projects = useBannerStore.getState().getAllProjects();
-    
-    if (projects.length === 0) {
-      // No projects - stay in editor with default project
-    } else if (projects.length === 1) {
-      // Only one project - load it directly
-      loadFromLocalStorage();
-    } else {
-      // Multiple projects - show gallery (home page)
-      setShowGallery(true);
-    }
+    const checkInitialProjects = async () => {
+      const projects = await useBannerStore.getState().getAllProjects();
+
+      if (projects.length === 0) {
+        // No projects - stay in editor with default project
+      } else if (projects.length === 1) {
+        // Only one project - load it directly
+        loadFromLocalStorage();
+      } else {
+        // Multiple projects - show gallery (home page)
+        setShowGallery(true);
+      }
+    };
+    checkInitialProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
@@ -46,10 +49,10 @@ export const SaveBar: React.FC = () => {
   const background = useBannerStore((state) => state.background);
   const logo = useBannerStore((state) => state.logo);
   const cta = useBannerStore((state) => state.cta);
-  
+
   useEffect(() => {
     setSaveStatus('unsaved');
-    
+
     // Debounce auto-save on changes
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
@@ -78,7 +81,7 @@ export const SaveBar: React.FC = () => {
     if (!lastSaved) return 'Never';
     const now = Date.now();
     const diff = now - lastSaved;
-    
+
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;

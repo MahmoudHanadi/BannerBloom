@@ -4,18 +4,27 @@ import { useBannerStore } from '../store/bannerStore';
 import {
     AlignLeft, AlignCenter, AlignRight, Trash2,
     ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
-    AlignStartVertical, AlignCenterVertical, AlignEndVertical
+    AlignStartVertical, AlignCenterVertical, AlignEndVertical,
+    Bold, Italic, Underline, Strikethrough
 } from 'lucide-react';
 
 const fonts = [
     'Inter',
+    'Roboto',
+    'Poppins',
+    'Montserrat',
+    'Open Sans',
+    'Lato',
+    'Oswald',
+    'Roboto Mono',
+    'Raleway',
+    'Playfair Display',
+    'Ubuntu',
     'Arial',
     'Helvetica',
     'Times New Roman',
     'Courier New',
-    'Georgia',
-    'Verdana',
-    'Tahoma'
+    'Georgia'
 ];
 
 export const PropertiesPanel: React.FC = () => {
@@ -475,29 +484,84 @@ export const PropertiesPanel: React.FC = () => {
                     <div className="space-y-3">
                         <h5 className="text-xs font-bold text-gray-500 uppercase">Text Alignment</h5>
                         <div className="grid grid-cols-1 gap-3">
-                            <div>
-                                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Horizontal</label>
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Horizontal</label>
+                                    <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
+                                        <button
+                                            onClick={() => handleStyleChange('textAlign', 'left')}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'left' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            title="Align Left"
+                                        >
+                                            <AlignLeft size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleStyleChange('textAlign', 'center')}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'center' || !effectiveElement.style?.textAlign ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            title="Align Center"
+                                        >
+                                            <AlignCenter size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleStyleChange('textAlign', 'right')}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'right' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            title="Align Right"
+                                        >
+                                            <AlignRight size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="w-24">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Direction</label>
+                                    <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
+                                        <button
+                                            onClick={() => handleStyleChange('direction', 'ltr')}
+                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'ltr' || !effectiveElement.style?.direction ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            title="Left-to-Right"
+                                        >
+                                            LTR
+                                        </button>
+                                        <button
+                                            onClick={() => handleStyleChange('direction', 'rtl')}
+                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'rtl' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            title="Right-to-Left"
+                                        >
+                                            RTL
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>    <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Styling</label>
                                 <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
                                     <button
-                                        onClick={() => handleStyleChange('textAlign', 'left')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'left' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
-                                        title="Align Left"
+                                        onClick={() => handleStyleChange('fontWeight', effectiveElement.style?.fontWeight === 'bold' ? 'normal' : 'bold')}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontWeight === 'bold' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        title="Bold"
                                     >
-                                        <AlignLeft size={18} />
+                                        <Bold size={18} />
                                     </button>
                                     <button
-                                        onClick={() => handleStyleChange('textAlign', 'center')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'center' || !effectiveElement.style?.textAlign ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
-                                        title="Align Center"
+                                        onClick={() => handleStyleChange('fontStyle', effectiveElement.style?.fontStyle === 'italic' ? 'normal' : 'italic')}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontStyle === 'italic' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        title="Italic"
                                     >
-                                        <AlignCenter size={18} />
+                                        <Italic size={18} />
                                     </button>
                                     <button
-                                        onClick={() => handleStyleChange('textAlign', 'right')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textAlign === 'right' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
-                                        title="Align Right"
+                                        onClick={() => handleStyleChange('textDecoration', effectiveElement.style?.textDecoration === 'underline' ? 'none' : 'underline')}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'underline' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        title="Underline"
                                     >
-                                        <AlignRight size={18} />
+                                        <Underline size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleStyleChange('textDecoration', effectiveElement.style?.textDecoration === 'line-through' ? 'none' : 'line-through')}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'line-through' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        title="Strikethrough"
+                                    >
+                                        <Strikethrough size={18} />
                                     </button>
                                 </div>
                             </div>

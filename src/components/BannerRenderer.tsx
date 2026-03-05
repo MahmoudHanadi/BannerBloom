@@ -44,7 +44,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0, initialX: 0, initialY: 0 });
   const [resizeStart, setResizeStart] = useState<{ x: number; y: number; w: number; h: number; handle: string; initialX?: number; initialY?: number; initialFontSize?: number }>({ x: 0, y: 0, w: 0, h: 0, handle: '' });
   const [rotateStart, setRotateStart] = useState({ angle: 0, startAngle: 0 });
   const [logoAspectRatio, setLogoAspectRatio] = useState<number>(1);
@@ -74,7 +74,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     // Calculate logo size (percentage of banner width)
     const logoWidthPercent = logo.size;
     const logoPixelWidth = (logoWidthPercent / 100) * displayWidth;
-    
+
     // Use actual aspect ratio from loaded image
     const logoPixelHeight = logoPixelWidth / logoAspectRatio;
 
@@ -184,14 +184,23 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const ctaLayout = getCTALayout();
 
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
+    e.preventDefault();
     e.stopPropagation();
     selectElement(elementId);
     selectBanner(bannerId);
     setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
+
+    const el = elements.find(e => e.id === elementId);
+    if (el) {
+      const layout = calculateElementLayout(el, overrides, width, height, category, scale);
+      setDragStart({ x: e.clientX, y: e.clientY, initialX: layout.x, initialY: layout.y });
+    } else {
+      setDragStart({ x: e.clientX, y: e.clientY, initialX: 0, initialY: 0 });
+    }
   };
 
   const handleResizeStart = (e: React.MouseEvent, handle: string, elementId: string) => {
+    e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
     const el = elements.find(e => e.id === elementId);
@@ -226,6 +235,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   };
 
   const handleRotateStart = (e: React.MouseEvent, elementId: string) => {
+    e.preventDefault();
     e.stopPropagation();
     setIsRotating(true);
     const el = elements.find(e => e.id === elementId);
@@ -261,10 +271,9 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         const deltaYPercent = (deltaY / displayHeight) * 100;
 
         setOverride(bannerId, selectedElementId, {
-          x: currentLayout.x + deltaXPercent, // Use currentLayout.x for base
-          y: currentLayout.y + deltaYPercent  // Use currentLayout.y for base
+          x: dragStart.initialX + deltaXPercent, // Use dragStart.initialX for base
+          y: dragStart.initialY + deltaYPercent  // Use dragStart.initialY for base
         });
-        setDragStart({ x: e.clientX, y: e.clientY });
       } else if (isResizing) {
         const deltaX = e.clientX - resizeStart.x;
         const deltaY = e.clientY - resizeStart.y;
@@ -362,7 +371,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
             const newFontSize = Math.round((resizeStart.initialFontSize || 32) * scaleRatio);
 
             setOverride(bannerId, selectedElementId, {
-              style: { ...element.style, fontSize: `${newFontSize}px` }
+              style: { fontSize: `${newFontSize}px` }
             });
           } else {
             // Calculate new height based on new width
@@ -528,7 +537,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
           ISOLATED MODE
         </div>
       )}
-      
+
       {elements.map((el, index) => {
         const layout = calculateElementLayout(el, overrides, width, height, category, scale);
         const isElSelected = el.id === selectedElementId && !isExport;
@@ -595,7 +604,10 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                   color: layout.mergedStyle.color,
                   fontWeight: layout.mergedStyle.fontWeight,
                   fontFamily: layout.mergedStyle.fontFamily,
+                  fontStyle: layout.mergedStyle.fontStyle as React.CSSProperties['fontStyle'],
+                  textDecoration: layout.mergedStyle.textDecoration as React.CSSProperties['textDecoration'],
                   textAlign: layout.mergedStyle.textAlign as React.CSSProperties['textAlign'],
+                  direction: layout.mergedStyle.direction as React.CSSProperties['direction'],
                   display: 'block',
                   whiteSpace: 'pre-wrap',
                   pointerEvents: 'none',
@@ -696,7 +708,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         // Determine background based on animation type
         let background = cta.backgroundColor;
         let backgroundSize = 'auto';
-        
+
         if (cta.animation === 'colorwave' && cta.colorWaveColors) {
           // For color wave, use a special gradient that animates
           background = `linear-gradient(90deg, ${cta.colorWaveColors[0]}, ${cta.colorWaveColors[1]}, ${cta.colorWaveColors[0]})`;

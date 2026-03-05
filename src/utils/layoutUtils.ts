@@ -70,38 +70,25 @@ export const calculateElementLayout = (
         }
     }
 
-    // Smart Anchoring Logic
+    // Continuous Smart Anchoring Logic
+    // Eliminates the 33% / 66% threshold jumps by interpolating the anchor factor
     const centerXPercent = props.x + props.w / 2;
     const centerYPercent = props.y + props.h / 2;
 
-    let pixelX = 0;
-    let pixelY = 0;
+    const baseX = (props.x / 100) * bannerWidth;
+    const baseY = (props.y / 100) * bannerHeight;
 
-    // Horizontal Anchoring
-    if (centerXPercent < 33) {
-        pixelX = (props.x / 100) * bannerWidth;
-    } else if (centerXPercent > 66) {
-        const rightGapPercent = 100 - (props.x + props.w);
-        const rightGapPixel = (rightGapPercent / 100) * bannerWidth;
-        pixelX = bannerWidth - rightGapPixel - pixelW;
-    } else {
-        const centerOffsetPercent = centerXPercent - 50;
-        const centerOffsetPixel = (centerOffsetPercent / 100) * bannerWidth;
-        pixelX = (bannerWidth / 2 + centerOffsetPixel) - (pixelW / 2);
-    }
+    const baseW = (props.w / 100) * bannerWidth;
+    const baseH = (props.h / 100) * bannerHeight;
 
-    // Vertical Anchoring
-    if (centerYPercent < 33) {
-        pixelY = (props.y / 100) * bannerHeight;
-    } else if (centerYPercent > 66) {
-        const bottomGapPercent = 100 - (props.y + props.h);
-        const bottomGapPixel = (bottomGapPercent / 100) * bannerHeight;
-        pixelY = bannerHeight - bottomGapPixel - pixelH;
-    } else {
-        const middleOffsetPercent = centerYPercent - 50;
-        const middleOffsetPixel = (middleOffsetPercent / 100) * bannerHeight;
-        pixelY = (bannerHeight / 2 + middleOffsetPixel) - (pixelH / 2);
-    }
+    const deltaW = baseW - pixelW;
+    const deltaH = baseH - pixelH;
+
+    const anchorFactorX = Math.max(0, Math.min(1, centerXPercent / 100));
+    const anchorFactorY = Math.max(0, Math.min(1, centerYPercent / 100));
+
+    const pixelX = baseX + anchorFactorX * deltaW;
+    const pixelY = baseY + anchorFactorY * deltaH;
 
     // Font Scaling Logic
     const masterH = masterMetrics[category].height;

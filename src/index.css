@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Open+Sans:wght@400;700&family=Poppins:wght@400;700&family=Roboto:wght@400;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -19,34 +20,52 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f9fafb; /* Light background for the app */
-  color: #111827; /* Dark text */
+  background-color: #f9fafb;
+  /* Light background for the app */
+  color: #111827;
+  /* Dark text */
 }
 
 /* CTA Animations */
 @keyframes cta-heartbeat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(1);
   }
+
   25% {
     transform: scale(1.1);
   }
+
   50% {
     transform: scale(1);
   }
+
   75% {
     transform: scale(1.05);
   }
 }
 
 @keyframes cta-shake {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateX(0) rotate(0deg);
   }
-  10%, 30%, 50%, 70%, 90% {
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
     transform: translateX(-3px) rotate(-1deg);
   }
-  20%, 40%, 60%, 80% {
+
+  20%,
+  40%,
+  60%,
+  80% {
     transform: translateX(3px) rotate(1deg);
   }
 }
@@ -55,9 +74,11 @@ body {
   0% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0% 50%;
   }

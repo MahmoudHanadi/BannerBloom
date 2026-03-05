@@ -34,18 +34,18 @@ export const ProjectGallery: React.FC = () => {
 
   useEffect(() => {
     if (showGallery) {
-      const allProjects = getAllProjects();
-      const allFolders = getAllFolders();
-      setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
-      setFolders(allFolders.sort((a, b) => a.name.localeCompare(b.name)));
-      // Auto-expand all folders by default
-      setExpandedFolders(new Set(allFolders.map(f => f.id)));
+      Promise.all([getAllProjects(), getAllFolders()]).then(([allProjects, allFolders]) => {
+        setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
+        setFolders(allFolders.sort((a, b) => a.name.localeCompare(b.name)));
+        // Auto-expand all folders by default
+        setExpandedFolders(new Set(allFolders.map(f => f.id)));
+      });
     }
   }, [showGallery, getAllProjects, getAllFolders]);
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (newProjectName.trim()) {
-      createNewProject(newProjectName.trim(), newProjectFolderId || undefined);
+      await createNewProject(newProjectName.trim(), newProjectFolderId || undefined);
       setNewProjectName('');
       setNewProjectFolderId(null);
       setShowNewProjectDialog(false);
@@ -53,10 +53,11 @@ export const ProjectGallery: React.FC = () => {
     }
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     if (newFolderName.trim()) {
-      createFolder(newFolderName.trim());
-      setFolders(getAllFolders().sort((a, b) => a.name.localeCompare(b.name)));
+      await createFolder(newFolderName.trim());
+      const allFolders = await getAllFolders();
+      setFolders(allFolders.sort((a, b) => a.name.localeCompare(b.name)));
       setNewFolderName('');
       setShowNewFolderDialog(false);
     }
@@ -78,17 +79,19 @@ export const ProjectGallery: React.FC = () => {
     loadProjectById(id);
   };
 
-  const handleDeleteProject = (id: string, name: string) => {
+  const handleDeleteProject = async (id: string, name: string) => {
     if (confirm(`Delete "${name}"? This cannot be undone.`)) {
-      deleteProject(id);
-      setProjects(getAllProjects().sort((a, b) => b.lastModified - a.lastModified));
+      await deleteProject(id);
+      const allProjects = await getAllProjects();
+      setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
     }
     setActiveMenu(null);
   };
 
-  const handleDuplicateProject = (id: string) => {
-    duplicateProject(id);
-    setProjects(getAllProjects().sort((a, b) => b.lastModified - a.lastModified));
+  const handleDuplicateProject = async (id: string) => {
+    await duplicateProject(id);
+    const allProjects = await getAllProjects();
+    setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
     setActiveMenu(null);
   };
 
@@ -99,31 +102,36 @@ export const ProjectGallery: React.FC = () => {
     setActiveMenu(null);
   };
 
-  const handleFinishRename = (id: string) => {
+  const handleFinishRename = async (id: string) => {
     if (renamingValue.trim()) {
       if (renamingType === 'project') {
-        renameProject(id, renamingValue.trim());
-        setProjects(getAllProjects().sort((a, b) => b.lastModified - a.lastModified));
+        await renameProject(id, renamingValue.trim());
+        const allProjects = await getAllProjects();
+        setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
       } else {
-        renameFolder(id, renamingValue.trim());
-        setFolders(getAllFolders().sort((a, b) => a.name.localeCompare(b.name)));
+        await renameFolder(id, renamingValue.trim());
+        const allFolders = await getAllFolders();
+        setFolders(allFolders.sort((a, b) => a.name.localeCompare(b.name)));
       }
     }
     setRenamingId(null);
   };
 
-  const handleDeleteFolder = (id: string, name: string) => {
+  const handleDeleteFolder = async (id: string, name: string) => {
     if (confirm(`Delete folder "${name}"? All projects in this folder will be moved to "All Projects".`)) {
-      deleteFolder(id);
-      setFolders(getAllFolders().sort((a, b) => a.name.localeCompare(b.name)));
-      setProjects(getAllProjects().sort((a, b) => b.lastModified - a.lastModified));
+      await deleteFolder(id);
+      const allFolders = await getAllFolders();
+      const allProjects = await getAllProjects();
+      setFolders(allFolders.sort((a, b) => a.name.localeCompare(b.name)));
+      setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
     }
     setActiveMenu(null);
   };
 
-  const handleMoveProject = (projectId: string, folderId: string | null) => {
-    moveProjectToFolder(projectId, folderId);
-    setProjects(getAllProjects().sort((a, b) => b.lastModified - a.lastModified));
+  const handleMoveProject = async (projectId: string, folderId: string | null) => {
+    await moveProjectToFolder(projectId, folderId);
+    const allProjects = await getAllProjects();
+    setProjects(allProjects.sort((a, b) => b.lastModified - a.lastModified));
     setMovingProjectId(null);
     setActiveMenu(null);
   };
@@ -131,12 +139,12 @@ export const ProjectGallery: React.FC = () => {
   const formatDate = (timestamp: number) => {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-    
+
     const date = new Date(timestamp);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
@@ -147,7 +155,7 @@ export const ProjectGallery: React.FC = () => {
       className="group border-2 border-gray-200 rounded-xl overflow-hidden hover:shadow-2xl transition-all hover:border-blue-400 bg-white hover:-translate-y-1"
     >
       {/* Thumbnail */}
-      <div 
+      <div
         className="h-48 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center cursor-pointer relative overflow-hidden"
         onClick={() => handleOpenProject(project.id)}
       >
@@ -181,14 +189,14 @@ export const ProjectGallery: React.FC = () => {
           />
         ) : (
           <div>
-            <h3 
+            <h3
               className="font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors text-base mb-2"
               onClick={() => handleOpenProject(project.id)}
               title={project.name}
             >
               {project.name}
             </h3>
-            
+
             <div className="flex items-center gap-1.5 mb-3 text-xs text-gray-500 font-medium">
               <Clock className="w-3.5 h-3.5" />
               {formatDate(project.lastModified)}
@@ -273,8 +281,8 @@ export const ProjectGallery: React.FC = () => {
                 Projects Playground
               </h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                {projects.length === 0 
-                  ? 'Welcome! Create your first project to get started' 
+                {projects.length === 0
+                  ? 'Welcome! Create your first project to get started'
                   : `${projects.length} project${projects.length !== 1 ? 's' : ''} · ${folders.length} folder${folders.length !== 1 ? 's' : ''}`
                 }
               </p>
@@ -373,7 +381,7 @@ export const ProjectGallery: React.FC = () => {
               {folders.map((folder) => {
                 const folderProjects = projects.filter(p => p.folderId === folder.id);
                 const isExpanded = expandedFolders.has(folder.id);
-                
+
                 return (
                   <div key={folder.id}>
                     <div className="flex items-center gap-3 mb-4 px-2 py-3 bg-white/50 rounded-lg border border-gray-200">
@@ -385,7 +393,7 @@ export const ProjectGallery: React.FC = () => {
                         {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronRight className="w-5 h-5 text-gray-600" />}
                       </button>
                       <Folder className="w-6 h-6" style={{ color: folder.color || '#3b82f6' }} />
-                      
+
                       {renamingId === folder.id && renamingType === 'folder' ? (
                         <input
                           type="text"
@@ -402,11 +410,11 @@ export const ProjectGallery: React.FC = () => {
                       ) : (
                         <h3 className="text-lg font-bold text-gray-700 flex-1">{folder.name}</h3>
                       )}
-                      
+
                       <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
                         {folderProjects.length}
                       </span>
-                      
+
                       {/* Folder Action Buttons - Always Visible */}
                       <div className="flex gap-2 ml-2">
                         <button
@@ -427,7 +435,7 @@ export const ProjectGallery: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    
+
                     {isExpanded && folderProjects.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {folderProjects.map((project) => renderProjectCard(project))}

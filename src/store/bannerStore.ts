@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import React from 'react';
+import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 export type ElementType = 'text' | 'image' | 'shape' | 'button';
 
@@ -58,12 +59,14 @@ export interface LogoConfig {
     padding: number; // Padding from edges in pixels
 }
 
-export type CTAPosition = 'top-left' | 'top-center' | 'top-right' | 'center' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+export type CTAPosition = 'top-left' | 'top-center' | 'top-right' | 'center' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'free-form';
 export type CTAAnimation = 'none' | 'heartbeat' | 'shake' | 'colorwave';
 
 export interface CTAConfig {
     text: string;
     position: CTAPosition;
+    x?: number; // Percentage 0-100 for free-form
+    y?: number; // Percentage 0-100 for free-form
     width: number; // Percentage of banner width
     height: number; // Pixels
     borderRadius: number; // Pixels
@@ -132,20 +135,20 @@ interface BannerState {
     updateCTA: (updates: Partial<CTAConfig>) => void;
     setProjectName: (name: string) => void;
     setShowGallery: (show: boolean) => void;
-    saveCurrentProject: () => void;
-    loadProjectById: (id: string) => void;
-    createNewProject: (name: string, folderId?: string) => void;
-    deleteProject: (id: string) => void;
-    duplicateProject: (id: string) => void;
-    renameProject: (id: string, newName: string) => void;
-    moveProjectToFolder: (projectId: string, folderId: string | null) => void;
-    getAllProjects: () => SavedProject[];
-    getAllFolders: () => Folder[];
-    createFolder: (name: string, color?: string) => void;
-    renameFolder: (id: string, newName: string) => void;
-    deleteFolder: (id: string) => void;
-    saveToLocalStorage: () => void;
-    loadFromLocalStorage: () => boolean;
+    saveCurrentProject: () => Promise<void>;
+    loadProjectById: (id: string) => Promise<void>;
+    createNewProject: (name: string, folderId?: string) => Promise<void>;
+    deleteProject: (id: string) => Promise<void>;
+    duplicateProject: (id: string) => Promise<void>;
+    renameProject: (id: string, newName: string) => Promise<void>;
+    moveProjectToFolder: (projectId: string, folderId: string | null) => Promise<void>;
+    getAllProjects: () => Promise<SavedProject[]>;
+    getAllFolders: () => Promise<Folder[]>;
+    createFolder: (name: string, color?: string) => Promise<void>;
+    renameFolder: (id: string, newName: string) => Promise<void>;
+    deleteFolder: (id: string) => Promise<void>;
+    saveToLocalStorage: () => Promise<void>;
+    loadFromLocalStorage: () => Promise<boolean>;
     saveProject: () => void;
     loadProject: (jsonString: string) => void;
 }
@@ -357,9 +360,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
 
     setShowGallery: (show) => set({ showGallery: show }),
 
-    getAllProjects: () => {
+    getAllProjects: async () => {
         try {
-            const projectsStr = localStorage.getItem('banner-spore-projects');
+            const projectsStr = await idbGet('banner-spore-projects');
             if (!projectsStr) return [];
             return JSON.parse(projectsStr) as SavedProject[];
         } catch (e) {
@@ -368,9 +371,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
     },
 
-    getAllFolders: () => {
+    getAllFolders: async () => {
         try {
-            const foldersStr = localStorage.getItem('banner-spore-folders');
+            const foldersStr = await idbGet('banner-spore-folders');
             if (!foldersStr) return [];
             return JSON.parse(foldersStr) as Folder[];
         } catch (e) {
@@ -379,7 +382,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
     },
 
-    createFolder: (name, color) => {
+    createFolder: async (name, color) => {
         const newFolder: Folder = {
             id: uuidv4(),
             name,
@@ -387,53 +390,53 @@ export const useBannerStore = create<BannerState>((set, get) => ({
             createdAt: Date.now(),
         };
 
-        const existingFolders = get().getAllFolders();
+        const existingFolders = await get().getAllFolders();
         existingFolders.push(newFolder);
-        localStorage.setItem('banner-spore-folders', JSON.stringify(existingFolders));
+        await idbSet('banner-spore-folders', JSON.stringify(existingFolders));
         console.log('✅ Folder created:', name);
     },
 
-    renameFolder: (id, newName) => {
-        const folders = get().getAllFolders();
+    renameFolder: async (id, newName) => {
+        const folders = await get().getAllFolders();
         const folder = folders.find(f => f.id === id);
         if (folder) {
             folder.name = newName;
-            localStorage.setItem('banner-spore-folders', JSON.stringify(folders));
+            await idbSet('banner-spore-folders', JSON.stringify(folders));
             console.log('✅ Folder renamed:', newName);
         }
     },
 
-    deleteFolder: (id) => {
+    deleteFolder: async (id) => {
         // Remove folder
-        const folders = get().getAllFolders().filter(f => f.id !== id);
-        localStorage.setItem('banner-spore-folders', JSON.stringify(folders));
+        const folders = (await get().getAllFolders()).filter(f => f.id !== id);
+        await idbSet('banner-spore-folders', JSON.stringify(folders));
 
         // Move all projects in this folder to root
-        const projects = get().getAllProjects();
+        const projects = await get().getAllProjects();
         projects.forEach(project => {
             if (project.folderId === id) {
                 project.folderId = null;
             }
         });
-        localStorage.setItem('banner-spore-projects', JSON.stringify(projects));
+        await idbSet('banner-spore-projects', JSON.stringify(projects));
         console.log('✅ Folder deleted and projects moved to root');
     },
 
-    moveProjectToFolder: (projectId, folderId) => {
-        const projects = get().getAllProjects();
+    moveProjectToFolder: async (projectId, folderId) => {
+        const projects = await get().getAllProjects();
         const project = projects.find(p => p.id === projectId);
         if (project) {
             project.folderId = folderId;
             project.lastModified = Date.now();
-            localStorage.setItem('banner-spore-projects', JSON.stringify(projects));
+            await idbSet('banner-spore-projects', JSON.stringify(projects));
             console.log('✅ Project moved to folder:', folderId || 'root');
         }
     },
 
-    saveCurrentProject: () => {
+    saveCurrentProject: async () => {
         const state = get();
-        const projects = state.getAllProjects();
-        
+        const projects = await state.getAllProjects();
+
         const projectData: SavedProject = {
             id: state.currentProjectId || `project-${Date.now()}`,
             name: state.projectName,
@@ -455,10 +458,10 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
 
         try {
-            localStorage.setItem('banner-spore-projects', JSON.stringify(projects));
-            set({ 
+            await idbSet('banner-spore-projects', JSON.stringify(projects));
+            set({
                 currentProjectId: projectData.id,
-                lastSaved: Date.now() 
+                lastSaved: Date.now()
             });
             console.log('✅ Project saved:', projectData.name);
         } catch (e) {
@@ -467,9 +470,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
     },
 
-    loadProjectById: (id) => {
+    loadProjectById: async (id) => {
         const state = get();
-        const projects = state.getAllProjects();
+        const projects = await state.getAllProjects();
         const project = projects.find(p => p.id === id);
 
         if (!project) {
@@ -496,9 +499,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         console.log('✅ Project loaded:', project.name);
     },
 
-    createNewProject: (name, folderId) => {
-        const defaultBannerSizes = get().bannerSizes;
-        
+    createNewProject: async (name, folderId) => {
         set({
             currentProjectId: null, // Will be set on first save
             projectName: name,
@@ -544,30 +545,31 @@ export const useBannerStore = create<BannerState>((set, get) => ({
             cta: savedState.cta,
         };
 
-        const existingProjects = JSON.parse(localStorage.getItem('banner-spore-projects') || '[]');
+        const existingProjectsStr = await idbGet('banner-spore-projects');
+        const existingProjects = existingProjectsStr ? JSON.parse(existingProjectsStr) : [];
         existingProjects.push(newProject);
-        localStorage.setItem('banner-spore-projects', JSON.stringify(existingProjects));
+        await idbSet('banner-spore-projects', JSON.stringify(existingProjects));
 
         set({ currentProjectId: newProjectId, lastSaved: newProject.lastModified });
         console.log('✅ New project created:', name, 'in folder:', folderId || 'root');
     },
 
-    deleteProject: (id) => {
+    deleteProject: async (id) => {
         const state = get();
-        const projects = state.getAllProjects();
+        const projects = await state.getAllProjects();
         const filtered = projects.filter(p => p.id !== id);
 
         try {
-            localStorage.setItem('banner-spore-projects', JSON.stringify(filtered));
+            await idbSet('banner-spore-projects', JSON.stringify(filtered));
             console.log('✅ Project deleted');
         } catch (e) {
             console.error('Failed to delete project:', e);
         }
     },
 
-    duplicateProject: (id) => {
+    duplicateProject: async (id) => {
         const state = get();
-        const projects = state.getAllProjects();
+        const projects = await state.getAllProjects();
         const original = projects.find(p => p.id === id);
 
         if (!original) return;
@@ -582,16 +584,16 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         projects.push(duplicate);
 
         try {
-            localStorage.setItem('banner-spore-projects', JSON.stringify(projects));
+            await idbSet('banner-spore-projects', JSON.stringify(projects));
             console.log('✅ Project duplicated');
         } catch (e) {
             console.error('Failed to duplicate project:', e);
         }
     },
 
-    renameProject: (id, newName) => {
+    renameProject: async (id, newName) => {
         const state = get();
-        const projects = state.getAllProjects();
+        const projects = await state.getAllProjects();
         const project = projects.find(p => p.id === id);
 
         if (!project) return;
@@ -600,32 +602,32 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         project.lastModified = Date.now();
 
         try {
-            localStorage.setItem('banner-spore-projects', JSON.stringify(projects));
-            
+            await idbSet('banner-spore-projects', JSON.stringify(projects));
+
             // If this is the current project, update the name in state too
             if (state.currentProjectId === id) {
                 set({ projectName: newName });
             }
-            
+
             console.log('✅ Project renamed');
         } catch (e) {
             console.error('Failed to rename project:', e);
         }
     },
 
-    saveToLocalStorage: () => {
+    saveToLocalStorage: async () => {
         // Redirect to saveCurrentProject for compatibility
-        get().saveCurrentProject();
+        await get().saveCurrentProject();
     },
 
-    loadFromLocalStorage: () => {
+    loadFromLocalStorage: async () => {
         // Load the most recent project
-        const projects = get().getAllProjects();
+        const projects = await get().getAllProjects();
         if (projects.length === 0) return false;
 
         // Sort by lastModified and load most recent
         const mostRecent = projects.sort((a, b) => b.lastModified - a.lastModified)[0];
-        get().loadProjectById(mostRecent.id);
+        await get().loadProjectById(mostRecent.id);
         return true;
     },
 

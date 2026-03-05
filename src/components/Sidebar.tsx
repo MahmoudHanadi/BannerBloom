@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useBannerStore } from '../store/bannerStore';
 import { LayersPanel } from './LayersPanel';
 import { LogoPanel } from './LogoPanel';
@@ -12,9 +12,13 @@ export const Sidebar: React.FC = () => {
   const getAllProjects = useBannerStore((state) => state.getAllProjects);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
+  const showGallery = useBannerStore((state) => state.showGallery);
   const [selectedShapeType, setSelectedShapeType] = useState<'rectangle' | 'circle' | 'rounded-rectangle' | 'button'>('rectangle');
+  const [projectsCount, setProjectsCount] = useState(0);
 
-  const projectsCount = getAllProjects().length;
+  useEffect(() => {
+    getAllProjects().then(projects => setProjectsCount(projects.length));
+  }, [getAllProjects, showGallery]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -63,8 +67,8 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-sm">
-      <div className="p-4 flex flex-col h-full overflow-hidden">
+    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-sm relative">
+      <div className="p-4 flex flex-col h-full overflow-y-auto custom-scrollbar">
         {/* Dashboard/Home Button - Fixed at Top */}
         <div className="flex-shrink-0 mb-4">
           <button
@@ -162,7 +166,7 @@ export const Sidebar: React.FC = () => {
         <CTAPanel />
 
         {/* Layers Section - Flexible, takes remaining space */}
-        <div className="flex-1 border-t border-gray-200 pt-4 min-h-0 flex flex-col">
+        <div className="flex-1 border-t border-gray-200 pt-4 min-h-[200px] flex flex-col shrink-0">
           <LayersPanel />
         </div>
       </div>

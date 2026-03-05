@@ -7,7 +7,7 @@ export const CTAPanel: React.FC = () => {
   const cta = useBannerStore((state) => state.cta);
   const setCTA = useBannerStore((state) => state.setCTA);
   const updateCTA = useBannerStore((state) => state.updateCTA);
-  
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [textSectionOpen, setTextSectionOpen] = useState(true);
   const [colorsSectionOpen, setColorsSectionOpen] = useState(false);
@@ -22,6 +22,7 @@ export const CTAPanel: React.FC = () => {
     { value: 'bottom-left', label: 'Bottom Left', icon: '↙️' },
     { value: 'bottom-center', label: 'Bottom Center', icon: '⬇️' },
     { value: 'bottom-right', label: 'Bottom Right', icon: '↘️' },
+    { value: 'free-form', label: 'Free Form', icon: '✋' },
   ];
 
   const handleAddCTA = () => {
@@ -42,6 +43,8 @@ export const CTAPanel: React.FC = () => {
       animation: 'none',
       animationSpeed: 1.5,
       colorWaveColors: ['#3b82f6', '#8b5cf6'],
+      x: 50,
+      y: 80,
     });
     setIsExpanded(true);
   };
@@ -63,18 +66,18 @@ export const CTAPanel: React.FC = () => {
     return { backgroundColor: cta.backgroundColor };
   };
 
-  const CollapsibleSection = ({ 
-    title, 
-    icon, 
-    isOpen, 
-    onToggle, 
+  const CollapsibleSection = ({
+    title,
+    icon,
+    isOpen,
+    onToggle,
     children,
-    badge 
-  }: { 
-    title: string; 
-    icon: React.ReactNode; 
-    isOpen: boolean; 
-    onToggle: () => void; 
+    badge
+  }: {
+    title: string;
+    icon: React.ReactNode;
+    isOpen: boolean;
+    onToggle: () => void;
     children: React.ReactNode;
     badge?: string;
   }) => (
@@ -104,8 +107,8 @@ export const CTAPanel: React.FC = () => {
         onClick={() => setIsExpanded(!isExpanded)}
         className={`
           w-full flex items-center justify-between p-3 rounded-lg transition-all
-          ${cta 
-            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 hover:border-green-300' 
+          ${cta
+            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 hover:border-green-300'
             : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
           }
         `}
@@ -135,7 +138,7 @@ export const CTAPanel: React.FC = () => {
       </button>
 
       {isExpanded && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-2 max-h-[60vh] overflow-y-auto pr-2 pb-2">
           {!cta ? (
             <div>
               <button
@@ -231,7 +234,7 @@ export const CTAPanel: React.FC = () => {
                       >
                         <div className="text-base mb-0.5">{pos.icon}</div>
                         <div className="text-[9px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                          {pos.label.split(' ')[0]}<br/>{pos.label.split(' ')[1] || ''}
+                          {pos.label.split(' ')[0]}<br />{pos.label.split(' ')[1] || ''}
                         </div>
                       </button>
                     ))}
@@ -309,16 +312,16 @@ export const CTAPanel: React.FC = () => {
                         <input
                           type="color"
                           value={cta.gradientColors?.[0] || '#3b82f6'}
-                          onChange={(e) => updateCTA({ 
-                            gradientColors: [e.target.value, cta.gradientColors?.[1] || '#8b5cf6'] 
+                          onChange={(e) => updateCTA({
+                            gradientColors: [e.target.value, cta.gradientColors?.[1] || '#8b5cf6']
                           })}
                           className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
                         />
                         <input
                           type="text"
                           value={cta.gradientColors?.[0] || '#3b82f6'}
-                          onChange={(e) => updateCTA({ 
-                            gradientColors: [e.target.value, cta.gradientColors?.[1] || '#8b5cf6'] 
+                          onChange={(e) => updateCTA({
+                            gradientColors: [e.target.value, cta.gradientColors?.[1] || '#8b5cf6']
                           })}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                         />
@@ -332,16 +335,16 @@ export const CTAPanel: React.FC = () => {
                         <input
                           type="color"
                           value={cta.gradientColors?.[1] || '#8b5cf6'}
-                          onChange={(e) => updateCTA({ 
-                            gradientColors: [cta.gradientColors?.[0] || '#3b82f6', e.target.value] 
+                          onChange={(e) => updateCTA({
+                            gradientColors: [cta.gradientColors?.[0] || '#3b82f6', e.target.value]
                           })}
                           className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
                         />
                         <input
                           type="text"
                           value={cta.gradientColors?.[1] || '#8b5cf6'}
-                          onChange={(e) => updateCTA({ 
-                            gradientColors: [cta.gradientColors?.[0] || '#3b82f6', e.target.value] 
+                          onChange={(e) => updateCTA({
+                            gradientColors: [cta.gradientColors?.[0] || '#3b82f6', e.target.value]
                           })}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                         />
@@ -555,16 +558,16 @@ export const CTAPanel: React.FC = () => {
                         <input
                           type="color"
                           value={cta.colorWaveColors?.[0] || '#3b82f6'}
-                          onChange={(e) => updateCTA({ 
-                            colorWaveColors: [e.target.value, cta.colorWaveColors?.[1] || '#8b5cf6'] 
+                          onChange={(e) => updateCTA({
+                            colorWaveColors: [e.target.value, cta.colorWaveColors?.[1] || '#8b5cf6']
                           })}
                           className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
                         />
                         <input
                           type="text"
                           value={cta.colorWaveColors?.[0] || '#3b82f6'}
-                          onChange={(e) => updateCTA({ 
-                            colorWaveColors: [e.target.value, cta.colorWaveColors?.[1] || '#8b5cf6'] 
+                          onChange={(e) => updateCTA({
+                            colorWaveColors: [e.target.value, cta.colorWaveColors?.[1] || '#8b5cf6']
                           })}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                         />
@@ -578,16 +581,16 @@ export const CTAPanel: React.FC = () => {
                         <input
                           type="color"
                           value={cta.colorWaveColors?.[1] || '#8b5cf6'}
-                          onChange={(e) => updateCTA({ 
-                            colorWaveColors: [cta.colorWaveColors?.[0] || '#3b82f6', e.target.value] 
+                          onChange={(e) => updateCTA({
+                            colorWaveColors: [cta.colorWaveColors?.[0] || '#3b82f6', e.target.value]
                           })}
                           className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
                         />
                         <input
                           type="text"
                           value={cta.colorWaveColors?.[1] || '#8b5cf6'}
-                          onChange={(e) => updateCTA({ 
-                            colorWaveColors: [cta.colorWaveColors?.[0] || '#3b82f6', e.target.value] 
+                          onChange={(e) => updateCTA({
+                            colorWaveColors: [cta.colorWaveColors?.[0] || '#3b82f6', e.target.value]
                           })}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                         />
