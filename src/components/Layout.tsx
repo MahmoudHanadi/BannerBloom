@@ -5,11 +5,30 @@ import { CanvasArea } from './CanvasArea';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ExportPanel } from './ExportPanel';
 import { ProjectGallery } from './ProjectGallery';
+import { WelcomeSplash } from './WelcomeSplash';
+import { useBannerStore } from '../store/bannerStore';
 
 export const Layout: React.FC = () => {
+    const setShowGallery = useBannerStore((state) => state.setShowGallery);
     const [isTopbarCollapsed, setIsTopbarCollapsed] = React.useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
     const [isInspectorCollapsed, setIsInspectorCollapsed] = React.useState(false);
+    const [showWelcomeSplash, setShowWelcomeSplash] = React.useState(() => {
+        if (typeof window === 'undefined') {
+            return true;
+        }
+
+        return window.sessionStorage.getItem('bannerbloom-launch-splash-dismissed') !== 'true';
+    });
+
+    const handleEnterLibrary = React.useCallback(() => {
+        if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem('bannerbloom-launch-splash-dismissed', 'true');
+        }
+
+        setShowGallery(true);
+        setShowWelcomeSplash(false);
+    }, [setShowGallery]);
 
     return (
         <div className="studio-shell flex h-screen min-h-0 w-screen flex-col overflow-hidden text-slate-900">
@@ -32,6 +51,7 @@ export const Layout: React.FC = () => {
                 />
             </div>
             <ProjectGallery />
+            {showWelcomeSplash && <WelcomeSplash onEnterLibrary={handleEnterLibrary} />}
         </div>
     );
 };

@@ -11,9 +11,9 @@ interface SaveBarProps {
 export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const projectName = useBannerStore((state) => state.projectName);
   const lastSaved = useBannerStore((state) => state.lastSaved);
+  const currentProjectId = useBannerStore((state) => state.currentProjectId);
   const setProjectName = useBannerStore((state) => state.setProjectName);
   const saveCurrentProject = useBannerStore((state) => state.saveCurrentProject);
-  const loadFromLocalStorage = useBannerStore((state) => state.loadFromLocalStorage);
   const saveProject = useBannerStore((state) => state.saveProject);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
 
@@ -24,32 +24,17 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   const hasTrackedChanges = useRef(false);
 
   useEffect(() => {
-    const checkInitialProjects = async () => {
-      const projects = await useBannerStore.getState().getAllProjects();
+    if (!currentProjectId) {
+      return;
+    }
 
-      if (projects.length === 0) {
-        return;
-      }
-
-      if (projects.length === 1) {
-        loadFromLocalStorage();
-        return;
-      }
-
-      setShowGallery(true);
-    };
-
-    checkInitialProjects();
-  }, [loadFromLocalStorage, setShowGallery]);
-
-  useEffect(() => {
     const interval = setInterval(() => {
       saveCurrentProject();
       setSaveStatus('saved');
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [saveCurrentProject]);
+  }, [currentProjectId, saveCurrentProject]);
 
   const elements = useBannerStore((state) => state.elements);
   const overrides = useBannerStore((state) => state.overrides);

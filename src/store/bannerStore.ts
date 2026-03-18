@@ -584,7 +584,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
   currentProjectId: null,
   currentFolderId: null,
   lastSaved: null,
-  showGallery: false,
+  showGallery: true,
   editorAssets: [],
 
   addElement: (type, content, shapeType, dimensions) =>
