@@ -1,395 +1,358 @@
-import React, { useState } from 'react';
-import html2canvas from 'html2canvas';
-import type { BannerSize } from '../store/bannerStore';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, ChevronDown, Download, Info, Loader2 } from 'lucide-react';
+import { getBannerPreset } from '../config/bannerPresets';
+import {
+  isSizeLimitIssue,
+  validateExportSelection,
+  validateGeneratedArtifact,
+} from '../lib/export/bannerValidation';
 import { useBannerStore } from '../store/bannerStore';
-import { Download, Loader2 } from 'lucide-react';
-import JSZip from 'jszip';
-import { generateHTML5, generateAMP } from '../utils/ampGenerator';
-import { createRoot } from 'react-dom/client';
-import { BannerRenderer } from './BannerRenderer';
+import type { ExportType } from '../store/bannerStore';
+import type { BannerSize, ExportValidationIssue } from '../types/banner';
+
+const isMasterBanner = (banner: BannerSize) =>
+  banner.isMaster ||
+  banner.name.toLowerCase().includes('master') ||
+  banner.name.toLowerCase().includes('source');
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = URL.createObjectURL(blob);
+  link.style.display = 'none';
+
+  document.body.appendChild(link);
+
+  setTimeout(() => {
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }, 100);
+  }, 0);
+};
+
+const hasBlockingErrors = (issues: ExportValidationIssue[], allowSizeLimitBypass = false) =>
+  issues.some(
+    (issue) => issue.level === 'error' && (!allowSizeLimitBypass || !isSizeLimitIssue(issue)),
+  );
 
 export const ExportPanel: React.FC = () => {
-    const bannerSizes = useBannerStore((state) => state.bannerSizes);
-    const elements = useBannerStore((state) => state.elements);
-    const overrides = useBannerStore((state) => state.overrides);
-    const selectElement = useBannerStore((state) => state.selectElement);
+  const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
+  const bannerSizes = useBannerStore((state) => state.bannerSizes);
+  const elements = useBannerStore((state) => state.elements);
+  const overrides = useBannerStore((state) => state.overrides);
+  const selectElement = useBannerStore((state) => state.selectElement);
 
-    const [selectedBanners, setSelectedBanners] = useState<Set<string>>(new Set());
-    const [isExporting, setIsExporting] = useState(false);
-    const [exportType, setExportType] = useState<'png' | 'html5' | 'amp' | null>(null);
-    const [isCollapsed, setIsCollapsed] = useState(true);
+  const preset = useMemo(() => getBannerPreset(bannerPresetId), [bannerPresetId]);
+  const exportableBanners = useMemo(
+    () => bannerSizes.filter((banner) => banner.exportable !== false && !isMasterBanner(banner)),
+    [bannerSizes],
+  );
 
-    const toggleBannerSelection = (bannerId: string) => {
-        const newSelection = new Set(selectedBanners);
-        if (newSelection.has(bannerId)) {
-            newSelection.delete(bannerId);
-        } else {
-            newSelection.add(bannerId);
-        }
-        setSelectedBanners(newSelection);
-    };
+  const [selectedBanners, setSelectedBanners] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportType, setExportType] = useState<ExportType | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [validationIssues, setValidationIssues] = useState<ExportValidationIssue[]>([]);
+  const [ignoreSizeLimits, setIgnoreSizeLimits] = useState(false);
 
-    const selectAll = () => {
-        setSelectedBanners(new Set(bannerSizes.map(b => b.id)));
-    };
+  const toggleBannerSelection = (bannerId: string) => {
+    setSelectedBanners((previous) => {
+      const next = new Set(previous);
+      if (next.has(bannerId)) {
+        next.delete(bannerId);
+      } else {
+        next.add(bannerId);
+      }
+      return next;
+    });
+  };
 
-    const deselectAll = () => {
-        setSelectedBanners(new Set());
-    };
+  const selectAll = () => {
+    setSelectedBanners(new Set(exportableBanners.map((banner) => banner.id)));
+  };
 
-    const downloadBlob = (blob: Blob, filename: string) => {
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = URL.createObjectURL(blob);
-        link.style.display = 'none';
+  const deselectAll = () => {
+    setSelectedBanners(new Set());
+  };
 
-        document.body.appendChild(link);
+  const runExport = async (type: ExportType) => {
+    const bannersToExport =
+      selectedBanners.size > 0
+        ? exportableBanners.filter((banner) => selectedBanners.has(banner.id))
+        : exportableBanners;
 
-        // Use setTimeout to ensure the link is in the DOM
-        setTimeout(() => {
-            link.click();
+    const preflightIssues = validateExportSelection(preset, bannersToExport, type);
+    setValidationIssues(preflightIssues);
 
-            // Cleanup after a delay
-            setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(link.href);
-            }, 100);
-        }, 0);
-    };
+    if (hasBlockingErrors(preflightIssues)) {
+      return;
+    }
 
-    const generateBannerBlob = async (banner: BannerSize) => {
-        // Create an off-screen container
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.left = '-10000px';
-        container.style.top = '-10000px';
-        container.style.width = `${banner.width}px`;
-        container.style.height = `${banner.height}px`;
-        container.style.backgroundColor = '#ffffff';
-        document.body.appendChild(container);
+    setIsExporting(true);
+    setExportType(type);
+    selectElement(null);
 
-        try {
-            const root = createRoot(container);
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
-            // Render at full scale (1:1)
-            root.render(
-                <BannerRenderer
-                    bannerId={banner.id}
-                    width={banner.width}
-                    height={banner.height}
-                    elements={elements}
-                    overrides={overrides[banner.id]}
-                    isMaster={banner.isMaster}
-                    category={banner.category}
-                    customScale={1}
-                    isExport={true}
-                />
-            );
+    try {
+      const { renderSelectedBanners, packageRenderedBanners } = await import(
+        '../lib/export/exportService'
+      );
+      const renderedBanners = await renderSelectedBanners({
+        banners: bannersToExport,
+        elements,
+        overrideMap: overrides,
+      });
 
-            // Wait for React to mount, images to load, and fonts to be ready
-            // Increase timeout for reliability
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            if ('fonts' in document) {
-                await (document as Document & { fonts: FontFaceSet }).fonts.ready;
-            }
+      const packaged = await packageRenderedBanners({
+        preset,
+        type,
+        renderedBanners,
+      });
 
-            const canvas = await html2canvas(container, {
-                backgroundColor: '#ffffff',
-                scale: 1,
-                useCORS: true,
-                logging: false,
-                allowTaint: true,
-                width: banner.width,
-                height: banner.height,
-            });
+      const generatedIssues = packaged.perBannerSizes.flatMap(({ banner, size }) =>
+        validateGeneratedArtifact(preset, type, banner, size),
+      );
+      const nextIssues = [...preflightIssues, ...generatedIssues];
+      setValidationIssues(nextIssues);
 
-            const blob = await new Promise<Blob>((resolve) => {
-                canvas.toBlob((blob) => {
-                    if (blob) resolve(blob);
-                }, 'image/png');
-            });
+      if (hasBlockingErrors(generatedIssues, ignoreSizeLimits)) {
+        return;
+      }
 
-            // Cleanup
-            root.unmount();
-            document.body.removeChild(container);
+      downloadBlob(packaged.blob, packaged.filename);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setValidationIssues([
+        ...preflightIssues,
+        {
+          id: 'runtime-export-error',
+          level: 'error',
+          code: 'runtime-error',
+          message: error instanceof Error ? error.message : 'Failed to export banners.',
+        },
+      ]);
+    } finally {
+      setIsExporting(false);
+      setExportType(null);
+    }
+  };
 
-            const filename = `${banner.name.replace(/\s+/g, '_')}_${banner.width}x${banner.height}.png`;
-            return { blob, filename };
-        } catch (error) {
-            console.error(`Failed to generate blob for ${banner.name}:`, error);
-            if (document.body.contains(container)) {
-                document.body.removeChild(container);
-            }
-            return null;
-        }
-    };
-
-    const exportBanners = async (type: 'png' | 'html5' | 'amp') => {
-        setIsExporting(true);
-        setExportType(type);
-        selectElement(null);
-
-        // Wait for selection to clear
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const bannersToExport = selectedBanners.size > 0
-            ? bannerSizes.filter(b => selectedBanners.has(b.id))
-            : bannerSizes;
-
-        try {
-            if (type === 'png') {
-                if (bannersToExport.length === 1) {
-                    const result = await generateBannerBlob(bannersToExport[0]);
-                    if (result) {
-                        downloadBlob(result.blob, result.filename);
-                    } else {
-                        alert('Failed to export banner.');
-                    }
-                } else {
-                    const zip = new JSZip();
-                    for (const banner of bannersToExport) {
-                        const result = await generateBannerBlob(banner);
-                        if (result) {
-                            zip.file(result.filename, result.blob);
-                        }
-                    }
-                    if (Object.keys(zip.files).length > 0) {
-                        const content = await zip.generateAsync({ type: 'blob' });
-                        downloadBlob(content, 'banners_images.zip');
-                    } else {
-                        alert('No banners were successfully exported.');
-                    }
-                }
-            } else if (type === 'html5' || type === 'amp') {
-                const generateZip = async (banner: BannerSize) => {
-                    // 1. Generate Image Blob
-                    const imageResult = await generateBannerBlob(banner);
-                    if (!imageResult || imageResult.blob.size === 0) {
-                        console.error('Failed to generate image blob or blob is empty');
-                        return null;
-                    }
-
-                    // 2. Generate HTML
-                    const html = type === 'html5'
-                        ? generateHTML5(banner)
-                        : generateAMP(banner);
-
-                    // 3. Create ZIP
-                    const zip = new JSZip();
-                    zip.file("index.html", html);
-                    zip.file("bg.png", imageResult.blob);
-
-                    const content = await zip.generateAsync({ type: 'blob' });
-
-                    // 4. Check Size (150KB limit)
-                    if (content.size > 150 * 1024) {
-                        console.warn(`Warning: Zip for ${banner.name} is ${Math.round(content.size / 1024)}KB, exceeding the 150KB limit.`);
-                    }
-
-                    return {
-                        blob: content,
-                        filename: `${banner.name.replace(/\s+/g, '_')}_${banner.width}x${banner.height}_${type}.zip`
-                    };
-                };
-
-                if (bannersToExport.length === 1) {
-                    const result = await generateZip(bannersToExport[0]);
-                    if (result) {
-                        downloadBlob(result.blob, result.filename);
-                    } else {
-                        alert('Failed to export banner.');
-                    }
-                } else {
-                    const masterZip = new JSZip();
-                    let count = 0;
-
-                    for (const banner of bannersToExport) {
-                        const result = await generateZip(banner);
-                        if (result) {
-                            masterZip.file(result.filename, result.blob);
-                            count++;
-                        }
-                    }
-
-                    if (count > 0) {
-                        const content = await masterZip.generateAsync({ type: 'blob' });
-                        downloadBlob(content, `banners_${type}_batch.zip`);
-                    } else {
-                        alert('No banners were successfully exported.');
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Export failed:', error);
-            alert('Failed to export banners.');
-        } finally {
-            setIsExporting(false);
-            setExportType(null);
-        }
-    };
+  const renderValidationIssue = (issue: ExportValidationIssue) => {
+    const Icon = issue.level === 'error' ? AlertTriangle : Info;
+    const styles =
+      issue.level === 'error'
+        ? 'border-red-200 bg-red-50 text-red-800'
+        : issue.level === 'warning'
+          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          : 'border-teal-200 bg-teal-50 text-teal-800';
 
     return (
-        <div className="bg-white border-t border-gray-200 shadow-lg transition-all duration-300">
-            <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
-                onClick={() => setIsCollapsed(!isCollapsed)}
+      <div
+        key={issue.id}
+        className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${styles}`}
+      >
+        <Icon className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        <span>{issue.message}</span>
+      </div>
+    );
+  };
+
+  const actionButton = (type: ExportType, label: string, className: string) => {
+    const isPresetSupported = preset.supportedExportTypes.includes(type);
+    const isCurrentExport = isExporting && exportType === type;
+
+    return (
+      <button
+        onClick={() => void runExport(type)}
+        disabled={isExporting || !isPresetSupported}
+        className={`
+          flex-1 rounded-xl px-4 py-3 font-semibold text-white shadow-md transition-all duration-200
+          flex items-center justify-center gap-2
+          ${
+            !isPresetSupported
+              ? 'cursor-not-allowed bg-gray-300'
+              : isCurrentExport
+                ? 'cursor-wait bg-gray-500'
+                : isExporting
+                  ? 'cursor-not-allowed bg-gray-400'
+                  : className
+          }
+        `}
+      >
+        {isCurrentExport ? (
+          <>
+            <Loader2 size={18} className="animate-spin" />
+            <span>Exporting...</span>
+          </>
+        ) : (
+          <>
+            <Download size={18} />
+            <span>{label}</span>
+          </>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div className="studio-export-panel border-t transition-all duration-300">
+      <div
+        className="flex cursor-pointer items-center justify-between px-6 py-4 hover:bg-white/40"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div>
+          <h3 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+            Deploy outputs
+            <ChevronDown
+              className={`h-5 w-5 transform transition-transform duration-200 ${
+                isCollapsed ? '-rotate-90' : 'rotate-0'
+              }`}
+            />
+          </h3>
+          {!isCollapsed && (
+            <p className="mt-1 text-sm text-slate-500">
+              Select the placements you want and export a production-ready package.
+            </p>
+          )}
+        </div>
+        {!isCollapsed && (
+          <div className="flex gap-3" onClick={(event) => event.stopPropagation()}>
+            <button
+              onClick={selectAll}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
             >
-                <div>
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        Export Banners
-                        <span className={`transform transition-transform duration-200 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
-                            ▼
-                        </span>
-                    </h3>
-                    {!isCollapsed && <p className="text-sm text-gray-500 mt-1">Select sizes to export</p>}
-                </div>
-                {!isCollapsed && (
-                    <div className="flex gap-3" onClick={e => e.stopPropagation()}>
-                        <button
-                            onClick={selectAll}
-                            className="text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                            Select All
-                        </button>
-                        <button
-                            onClick={deselectAll}
-                            className="text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                            Deselect All
-                        </button>
-                    </div>
-                )}
+              Select All
+            </button>
+            <button
+              onClick={deselectAll}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            >
+              Deselect All
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!isCollapsed && (
+        <div className="space-y-4 px-6 pb-6 pt-0">
+          <div className="studio-section-card rounded-[1.1rem] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+              <span className="font-semibold">Preset:</span>
+              <span>{preset.name}</span>
+              <span className="text-slate-300">/</span>
+              <span>{preset.description}</span>
+            </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Supported outputs: {preset.supportedExportTypes.map((type) => type.toUpperCase()).join(', ')}. Source canvases stay in the editor and are excluded from export.
+              </p>
             </div>
 
-            {!isCollapsed && (
-                <div className="p-6 pt-0">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                        {bannerSizes.map((banner) => (
-                            <label
-                                key={banner.id}
-                                className={`
-                                    flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200
-                                    ${selectedBanners.has(banner.id)
-                                        ? 'bg-emerald-50 border-emerald-200 shadow-sm'
-                                        : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-gray-100'
-                                    }
-                                `}
-                            >
-                                <div className={`
-                                    w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                    ${selectedBanners.has(banner.id)
-                                        ? 'bg-emerald-600 border-emerald-600'
-                                        : 'bg-white border-gray-300'
-                                    }
-                                `}>
-                                    {selectedBanners.has(banner.id) && (
-                                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    )}
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={selectedBanners.has(banner.id)}
-                                    onChange={() => toggleBannerSelection(banner.id)}
-                                    className="hidden"
-                                />
-                                <div className="flex flex-col min-w-0">
-                                    <span className={`text-sm font-medium truncate ${selectedBanners.has(banner.id) ? 'text-emerald-900' : 'text-gray-700'}`}>
-                                        {banner.name}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                        {banner.width} × {banner.height}
-                                    </span>
-                                </div>
-                            </label>
-                        ))}
-                    </div>
+          {validationIssues.length > 0 && (
+            <div className="space-y-2">{validationIssues.map(renderValidationIssue)}</div>
+          )}
 
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <button
-                            onClick={() => exportBanners('png')}
-                            disabled={isExporting}
-                            className={`
-                                flex-1 py-3 px-4 rounded-xl font-semibold text-white shadow-md transition-all duration-200
-                                flex items-center justify-center gap-2
-                                ${isExporting && exportType === 'png'
-                                    ? 'bg-emerald-400 cursor-wait'
-                                    : isExporting
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 hover:shadow-lg transform hover:-translate-y-0.5'
-                                }
-                            `}
-                        >
-                            {isExporting && exportType === 'png' ? (
-                                <>
-                                    <Loader2 size={18} className="animate-spin" />
-                                    <span>Exporting...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Download size={18} />
-                                    <span>Download Images</span>
-                                </>
-                            )}
-                        </button>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <input
+              type="checkbox"
+              checked={ignoreSizeLimits}
+              onChange={(event) => setIgnoreSizeLimits(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+            />
+            <div className="space-y-1">
+              <span className="block font-semibold">Ignore size limits and download anyway</span>
+              <span className="block text-xs text-amber-800">
+                This only bypasses generated file size errors. Unsupported presets and runtime
+                failures still block export.
+              </span>
+            </div>
+          </label>
 
-                        <button
-                            onClick={() => exportBanners('html5')}
-                            disabled={isExporting}
-                            className={`
-                                flex-1 py-3 px-4 rounded-xl font-semibold text-white shadow-md transition-all duration-200
-                                flex items-center justify-center gap-2
-                                ${isExporting && exportType === 'html5'
-                                    ? 'bg-teal-400 cursor-wait'
-                                    : isExporting
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 hover:shadow-lg transform hover:-translate-y-0.5'
-                                }
-                            `}
-                        >
-                            {isExporting && exportType === 'html5' ? (
-                                <>
-                                    <Loader2 size={18} className="animate-spin" />
-                                    <span>Exporting...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Download size={18} />
-                                    <span>Download HTML5</span>
-                                </>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={() => exportBanners('amp')}
-                            disabled={isExporting}
-                            className={`
-                                flex-1 py-3 px-4 rounded-xl font-semibold text-white shadow-md transition-all duration-200
-                                flex items-center justify-center gap-2
-                                ${isExporting && exportType === 'amp'
-                                    ? 'bg-amber-400 cursor-wait'
-                                    : isExporting
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 hover:shadow-lg transform hover:-translate-y-0.5'
-                                }
-                            `}
-                        >
-                            {isExporting && exportType === 'amp' ? (
-                                <>
-                                    <Loader2 size={18} className="animate-spin" />
-                                    <span>Exporting...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Download size={18} />
-                                    <span>Download AMP</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
+          <div className="grid max-h-48 grid-cols-1 gap-3 overflow-y-auto pr-2 custom-scrollbar sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {exportableBanners.map((banner) => (
+              <label
+                key={banner.id}
+                className={`
+                  flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all duration-200
+                  ${
+                    selectedBanners.has(banner.id)
+                      ? 'border-emerald-200 bg-emerald-50 shadow-sm'
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100'
+                  }
+                `}
+              >
+                <div
+                  className={`
+                    flex h-5 w-5 items-center justify-center rounded border transition-colors
+                    ${
+                      selectedBanners.has(banner.id)
+                        ? 'border-emerald-600 bg-emerald-600'
+                        : 'border-gray-300 bg-white'
+                    }
+                  `}
+                >
+                  {selectedBanners.has(banner.id) && (
+                    <svg
+                      className="h-3.5 w-3.5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
                 </div>
+                <input
+                  type="checkbox"
+                  checked={selectedBanners.has(banner.id)}
+                  onChange={() => toggleBannerSelection(banner.id)}
+                  className="hidden"
+                />
+                <div className="flex min-w-0 flex-col">
+                  <span
+                    className={`truncate text-sm font-medium ${
+                      selectedBanners.has(banner.id) ? 'text-emerald-900' : 'text-gray-700'
+                    }`}
+                  >
+                    {banner.name}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {banner.width} x {banner.height}
+                  </span>
+                  {banner.notes && (
+                    <span className="text-[11px] font-medium text-gray-400">{banner.notes}</span>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {actionButton(
+              'png',
+              'Export PNG set',
+              'bg-gradient-to-r from-emerald-600 to-teal-600 hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700 hover:shadow-lg',
             )}
+            {actionButton(
+              'html5',
+              'Export HTML5 package',
+              'bg-gradient-to-r from-teal-600 to-cyan-600 hover:-translate-y-0.5 hover:from-teal-700 hover:to-cyan-700 hover:shadow-lg',
+            )}
+            {actionButton(
+              'amp',
+              'Export AMP package',
+              'bg-gradient-to-r from-slate-800 to-teal-900 hover:-translate-y-0.5 hover:from-slate-900 hover:to-teal-950 hover:shadow-lg',
+            )}
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 };

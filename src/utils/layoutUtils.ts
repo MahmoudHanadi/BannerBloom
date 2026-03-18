@@ -16,19 +16,14 @@ export interface CalculatedLayout {
     aspectRatio?: number;
 }
 
-export const masterMetrics = {
-    horizontal: { width: 1200, height: 628 },
-    square: { width: 1200, height: 1200 },
-    vertical: { width: 960, height: 1200 },
-};
-
 export const calculateElementLayout = (
     el: BannerElement,
     overrides: Record<string, Override> | undefined,
     bannerWidth: number,
     bannerHeight: number,
-    category: 'square' | 'horizontal' | 'vertical',
-    scale: number = 1
+    _category: 'square' | 'horizontal' | 'vertical',
+    scale: number = 1,
+    masterHeight: number = bannerHeight,
 ): CalculatedLayout => {
     const override = overrides?.[el.id];
 
@@ -91,9 +86,8 @@ export const calculateElementLayout = (
     const pixelY = baseY + anchorFactorY * deltaH;
 
     // Font Scaling Logic
-    const masterH = masterMetrics[category].height;
     const baseFontSize = parseInt((props.style?.fontSize as string) || '32');
-    const responsiveFontSize = (baseFontSize / masterH) * bannerHeight;
+    const responsiveFontSize = (baseFontSize / masterHeight) * bannerHeight;
     const displayFontSize = responsiveFontSize * scale;
 
     return {

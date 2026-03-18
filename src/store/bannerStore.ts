@@ -1,715 +1,1091 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import React from 'react';
-import { get as idbGet, set as idbSet } from 'idb-keyval';
+import {
+  defaultBannerPresetId,
+  getBannerSizesForPreset,
+  normalizeBannerSizesForPreset,
+} from '../config/bannerPresets';
+import {
+  blobToDataUrl,
+  createEditorAssetFromBlob,
+  dataUrlToBlob,
+  isDataUrl,
+  revokeEditorAsset,
+} from '../lib/assetUtils';
+import {
+  createDefaultBackground,
+  createDefaultCTA,
+  createDefaultElements,
+  createDefaultLogo,
+  createNewProjectElements,
+} from '../lib/editorDefaults';
+import {
+  createFolderRecord,
+  createStoredAssetRef,
+  deleteFolderRecord,
+  deleteProjectRecord,
+  duplicateProjectRecord,
+  getFallbackPresetId,
+  getProjectAssetBlob,
+  getProjectDocument,
+  isStoredAssetRef,
+  listFolders,
+  listProjects,
+  moveProjectRecord,
+  renameFolderRecord,
+  renameProjectRecord,
+  saveProjectDocument,
+  type ProjectAssetRecord,
+  type StoredProjectDocument,
+} from '../lib/projectStorage';
+import type {
+  BackgroundConfig,
+  BannerElement,
+  BannerPresetId,
+  BannerSize,
+  CTAConfig,
+  EditorAsset,
+  ElementType,
+  Folder,
+  LogoConfig,
+  Override,
+  ProjectSummary,
+  SavedProject,
+} from '../types/banner';
 
-export type ElementType = 'text' | 'image' | 'shape' | 'button';
+export type {
+  BackgroundConfig,
+  BannerCategory,
+  BannerElement,
+  BannerPreset,
+  BannerPresetId,
+  BannerSize,
+  CTAAnimation,
+  CTAConfig,
+  CTAPosition,
+  EditorAsset,
+  ElementType,
+  ExportType,
+  Folder,
+  LogoConfig,
+  LogoPosition,
+  Override,
+  ProjectSummary,
+  SavedProject,
+} from '../types/banner';
 
-export interface BannerElement {
-    id: string;
-    type: ElementType;
-    content: string; // Text content or Image URL or Shape color
-    x: number; // Percentage 0-100
-    y: number; // Percentage 0-100
-    width: number; // Percentage 0-100
-    height: number; // Percentage 0-100
-    rotation: number; // Degrees
-    aspectRatioLocked: boolean;
-    aspectRatio?: number; // Desired aspect ratio (width / height)
-    shapeType?: 'rectangle' | 'circle' | 'rounded-rectangle'; // For shape elements
-    style?: React.CSSProperties & { fontFamily?: string };
+interface PortableProjectAsset {
+  assetId: string;
+  name?: string;
+  mimeType?: string;
+  dataUrl: string;
 }
 
-export interface Override {
-    content?: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    rotation?: number;
-    scale?: number;
-    aspectRatio?: number;
-    style?: React.CSSProperties & { fontFamily?: string };
-    isAutoPropagated?: boolean;
-}
-
-export interface BannerSize {
-    id: string;
-    name: string;
-    width: number;
-    height: number;
-    category: 'square' | 'horizontal' | 'vertical';
-    isMaster?: boolean;
-}
-
-export interface BackgroundConfig {
-    type: 'solid' | 'gradient' | 'image';
-    value: string; // Hex color, or image URL
-    gradientType?: 'linear' | 'radial';
-    gradientColors?: string[]; // For gradient
-    gradientDirection?: string; // e.g., "to right"
-}
-
-export type LogoPosition = 'top-left' | 'top-center' | 'top-right' | 'center' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-
-export interface LogoConfig {
-    image: string; // Base64 or URL
-    position: LogoPosition;
-    size: number; // Percentage of banner width (e.g., 15 = 15% of banner width)
-    padding: number; // Padding from edges in pixels
-}
-
-export type CTAPosition = 'top-left' | 'top-center' | 'top-right' | 'center' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'free-form';
-export type CTAAnimation = 'none' | 'heartbeat' | 'shake' | 'colorwave';
-
-export interface CTAConfig {
-    text: string;
-    position: CTAPosition;
-    x?: number; // Percentage 0-100 for free-form
-    y?: number; // Percentage 0-100 for free-form
-    width: number; // Percentage of banner width
-    height: number; // Pixels
-    borderRadius: number; // Pixels
-    backgroundColor: string; // Solid color or gradient
-    backgroundType: 'solid' | 'gradient';
-    gradientColors?: [string, string]; // For gradient
-    gradientDirection?: string; // e.g., "to right", "135deg"
-    textColor: string;
-    fontSize: number; // Percentage of height
-    fontWeight: 'normal' | 'bold' | 'bolder';
-    padding: number; // Padding from edges in pixels
-    animation: CTAAnimation;
-    animationSpeed: number; // Duration in seconds (0.5 to 5)
-    colorWaveColors?: [string, string]; // For color wave animation
-}
-
-export interface Folder {
-    id: string;
-    name: string;
-    color?: string; // Optional color for folder icon
-    createdAt: number;
-}
-
-export interface SavedProject {
-    id: string;
-    name: string;
-    lastModified: number;
-    folderId?: string | null; // Optional folder assignment
-    thumbnail?: string;
-    elements: BannerElement[];
-    overrides: Record<string, Record<string, Override>>;
-    bannerSizes: BannerSize[];
-    background: BackgroundConfig;
-    logo: LogoConfig | null;
-    cta: CTAConfig | null;
+interface PortableProjectFile {
+  version: '2.0';
+  projectName: string;
+  bannerPresetId: BannerPresetId;
+  lastSaved: number;
+  elements: Array<Omit<BannerElement, 'content'> & { content: string | { kind: 'project-asset'; assetId: string } }>;
+  overrides: Record<string, Record<string, Override>>;
+  bannerSizes: BannerSize[];
+  background: Omit<BackgroundConfig, 'value'> & { value: string | { kind: 'project-asset'; assetId: string } };
+  logo: (Omit<LogoConfig, 'image'> & { image: string | { kind: 'project-asset'; assetId: string } }) | null;
+  cta: CTAConfig | null;
+  assets: PortableProjectAsset[];
 }
 
 interface BannerState {
-    elements: BannerElement[];
-    overrides: Record<string, Record<string, Override>>; // { bannerId: { elementId: override } }
-    selectedElementId: string | null;
-    selectedBannerId: string | null;
-    bannerSizes: BannerSize[];
-    background: BackgroundConfig;
-    isolatedBannerId: string | null; // Banner in isolated edit mode
-    logo: LogoConfig | null; // Global logo configuration
-    cta: CTAConfig | null; // Global CTA button configuration
-    projectName: string; // Current project name
-    currentProjectId: string | null; // ID of currently open project
-    lastSaved: number | null; // Timestamp of last save
-    showGallery: boolean; // Whether to show project gallery
-
-    // Actions
-    addElement: (type: ElementType, content: string, shapeType?: string, dimensions?: { width: number; height: number }) => void;
-    updateElement: (id: string, updates: Partial<BannerElement>) => void;
-    setOverride: (bannerId: string, elementId: string, override: Override) => void;
-    selectElement: (id: string | null) => void;
-    selectBanner: (id: string | null) => void;
-    removeElement: (id: string) => void;
-    reorderElement: (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => void;
-    setBackground: (bg: BackgroundConfig) => void;
-    setIsolatedBanner: (bannerId: string | null) => void;
-    setLogo: (logo: LogoConfig | null) => void;
-    updateLogo: (updates: Partial<LogoConfig>) => void;
-    setCTA: (cta: CTAConfig | null) => void;
-    updateCTA: (updates: Partial<CTAConfig>) => void;
-    setProjectName: (name: string) => void;
-    setShowGallery: (show: boolean) => void;
-    saveCurrentProject: () => Promise<void>;
-    loadProjectById: (id: string) => Promise<void>;
-    createNewProject: (name: string, folderId?: string) => Promise<void>;
-    deleteProject: (id: string) => Promise<void>;
-    duplicateProject: (id: string) => Promise<void>;
-    renameProject: (id: string, newName: string) => Promise<void>;
-    moveProjectToFolder: (projectId: string, folderId: string | null) => Promise<void>;
-    getAllProjects: () => Promise<SavedProject[]>;
-    getAllFolders: () => Promise<Folder[]>;
-    createFolder: (name: string, color?: string) => Promise<void>;
-    renameFolder: (id: string, newName: string) => Promise<void>;
-    deleteFolder: (id: string) => Promise<void>;
-    saveToLocalStorage: () => Promise<void>;
-    loadFromLocalStorage: () => Promise<boolean>;
-    saveProject: () => void;
-    loadProject: (jsonString: string) => void;
+  elements: BannerElement[];
+  overrides: Record<string, Record<string, Override>>;
+  selectedElementId: string | null;
+  selectedBannerId: string | null;
+  bannerPresetId: BannerPresetId;
+  bannerSizes: BannerSize[];
+  background: BackgroundConfig;
+  isolatedBannerId: string | null;
+  logo: LogoConfig | null;
+  cta: CTAConfig | null;
+  projectName: string;
+  currentProjectId: string | null;
+  currentFolderId: string | null;
+  lastSaved: number | null;
+  showGallery: boolean;
+  editorAssets: EditorAsset[];
+  addElement: (
+    type: ElementType,
+    content: string,
+    shapeType?: string,
+    dimensions?: { width: number; height: number },
+  ) => void;
+  addImageElementFromBlob: (blob: Blob, name?: string) => Promise<void>;
+  setBackgroundImageFromBlob: (blob: Blob, name?: string) => Promise<void>;
+  setLogoFromBlob: (blob: Blob, name?: string) => Promise<void>;
+  updateElement: (id: string, updates: Partial<BannerElement>) => void;
+  setOverride: (bannerId: string, elementId: string, override: Override) => void;
+  selectElement: (id: string | null) => void;
+  selectBanner: (id: string | null) => void;
+  removeElement: (id: string) => void;
+  reorderElement: (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => void;
+  setBackground: (bg: BackgroundConfig) => void;
+  setBannerPreset: (presetId: BannerPresetId) => void;
+  setIsolatedBanner: (bannerId: string | null) => void;
+  setLogo: (logo: LogoConfig | null) => void;
+  updateLogo: (updates: Partial<LogoConfig>) => void;
+  setCTA: (cta: CTAConfig | null) => void;
+  updateCTA: (updates: Partial<CTAConfig>) => void;
+  setProjectName: (name: string) => void;
+  setShowGallery: (show: boolean) => void;
+  saveCurrentProject: () => Promise<void>;
+  loadProjectById: (id: string) => Promise<void>;
+  createNewProject: (name: string, folderId?: string) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+  duplicateProject: (id: string) => Promise<void>;
+  renameProject: (id: string, newName: string) => Promise<void>;
+  moveProjectToFolder: (projectId: string, folderId: string | null) => Promise<void>;
+  getAllProjects: () => Promise<ProjectSummary[]>;
+  getAllFolders: () => Promise<Folder[]>;
+  createFolder: (name: string, color?: string) => Promise<void>;
+  renameFolder: (id: string, newName: string) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
+  saveToLocalStorage: () => Promise<void>;
+  loadFromLocalStorage: () => Promise<boolean>;
+  saveProject: () => Promise<void>;
+  loadProject: (jsonString: string) => Promise<void>;
 }
 
+const revokeAssets = (assets: EditorAsset[]) => {
+  for (const asset of assets) {
+    revokeEditorAsset(asset);
+  }
+};
+
+const collectReferencedAssetSources = ({
+  elements,
+  background,
+  logo,
+}: Pick<BannerState, 'elements' | 'background' | 'logo'>) => {
+  const sources = new Set<string>();
+
+  for (const element of elements) {
+    if (element.type === 'image') {
+      sources.add(element.content);
+    }
+  }
+
+  if (background.type === 'image') {
+    sources.add(background.value);
+  }
+
+  if (logo) {
+    sources.add(logo.image);
+  }
+
+  return sources;
+};
+
+const pruneUnusedEditorAssets = ({
+  editorAssets,
+  elements,
+  background,
+  logo,
+}: Pick<BannerState, 'editorAssets' | 'elements' | 'background' | 'logo'>) => {
+  const referencedSources = collectReferencedAssetSources({ elements, background, logo });
+  const nextAssets: EditorAsset[] = [];
+
+  for (const asset of editorAssets) {
+    if (referencedSources.has(asset.src)) {
+      nextAssets.push(asset);
+      continue;
+    }
+
+    revokeEditorAsset(asset);
+  }
+
+  return nextAssets;
+};
+
+const buildNextEditorAssets = (
+  state: Pick<BannerState, 'editorAssets' | 'elements' | 'background' | 'logo'>,
+  updates: Partial<Pick<BannerState, 'editorAssets' | 'elements' | 'background' | 'logo'>>,
+) =>
+  pruneUnusedEditorAssets({
+    editorAssets: updates.editorAssets ?? state.editorAssets,
+    elements: updates.elements ?? state.elements,
+    background: updates.background ?? state.background,
+    logo: updates.logo ?? state.logo,
+  });
+
+const replaceEditorAssets = (
+  set: (partial: Partial<BannerState>) => void,
+  nextAssets: EditorAsset[],
+  previousAssets: EditorAsset[],
+) => {
+  revokeAssets(previousAssets);
+  set({ editorAssets: nextAssets });
+};
+
+const getAssetBySrc = (assets: EditorAsset[], src: string) =>
+  assets.find((asset) => asset.src === src);
+
+const mergeOverride = (existing: Override | undefined, nextOverride: Override): Override => {
+  const merged = { ...(existing ?? {}), ...nextOverride };
+  if (existing?.style && nextOverride.style) {
+    merged.style = { ...existing.style, ...nextOverride.style };
+  }
+  return merged;
+};
+
+const hasMeaningfulOverride = (override: Override | undefined) =>
+  Boolean(
+    override &&
+      (override.content !== undefined ||
+        override.x !== undefined ||
+        override.y !== undefined ||
+        override.width !== undefined ||
+        override.height !== undefined ||
+        override.rotation !== undefined ||
+        override.scale !== undefined ||
+        override.aspectRatio !== undefined ||
+        (override.style && Object.keys(override.style).length > 0)),
+  );
+
+const stripOverridePatch = (existing: Override | undefined, patch: Override): Override | undefined => {
+  if (!existing) return existing;
+
+  const nextOverride: Override = { ...existing };
+
+  if (patch.content !== undefined) delete nextOverride.content;
+  if (patch.x !== undefined) delete nextOverride.x;
+  if (patch.y !== undefined) delete nextOverride.y;
+  if (patch.width !== undefined) delete nextOverride.width;
+  if (patch.height !== undefined) delete nextOverride.height;
+  if (patch.rotation !== undefined) delete nextOverride.rotation;
+  if (patch.scale !== undefined) delete nextOverride.scale;
+  if (patch.aspectRatio !== undefined) delete nextOverride.aspectRatio;
+
+  if (patch.style) {
+    const nextStyle = { ...(nextOverride.style ?? {}) };
+    for (const styleKey of Object.keys(patch.style) as Array<keyof NonNullable<Override['style']>>) {
+      delete nextStyle[styleKey];
+    }
+
+    if (Object.keys(nextStyle).length > 0) {
+      nextOverride.style = nextStyle;
+    } else {
+      delete nextOverride.style;
+    }
+  }
+
+  return hasMeaningfulOverride(nextOverride) ? nextOverride : undefined;
+};
+
+const isGlobalSquareMaster = (banner: BannerSize | undefined) =>
+  Boolean(banner?.isMaster && banner.category === 'square');
+
+const shouldSquareMasterStripOverride = (
+  targetBanner: BannerSize | undefined,
+  sourceBannerId: string,
+  currentOverride: Override,
+) =>
+  targetBanner?.id === sourceBannerId ||
+  Boolean(targetBanner?.isMaster) ||
+  Boolean(currentOverride.isAutoPropagated);
+
+const applyPatchToElement = (element: BannerElement, patch: Override): BannerElement => ({
+  ...element,
+  ...(patch.content !== undefined ? { content: patch.content } : {}),
+  ...(patch.x !== undefined ? { x: patch.x } : {}),
+  ...(patch.y !== undefined ? { y: patch.y } : {}),
+  ...(patch.width !== undefined ? { width: patch.width } : {}),
+  ...(patch.height !== undefined ? { height: patch.height } : {}),
+  ...(patch.rotation !== undefined ? { rotation: patch.rotation } : {}),
+  ...(patch.aspectRatio !== undefined ? { aspectRatio: patch.aspectRatio } : {}),
+  ...(patch.style ? { style: { ...element.style, ...patch.style } } : {}),
+});
+
+const buildStoredAssetValue = async (
+  value: string,
+  editorAssets: EditorAsset[],
+  pendingAssets: Map<string, ProjectAssetRecord>,
+) => {
+  const existingAsset = getAssetBySrc(editorAssets, value);
+  if (existingAsset) {
+    pendingAssets.set(existingAsset.id, {
+      assetId: existingAsset.id,
+      blob: existingAsset.blob,
+    });
+    return createStoredAssetRef(existingAsset.id);
+  }
+
+  if (isDataUrl(value)) {
+    const blob = await dataUrlToBlob(value);
+    const asset = await createEditorAssetFromBlob(blob);
+    pendingAssets.set(asset.id, { assetId: asset.id, blob: asset.blob });
+    return createStoredAssetRef(asset.id);
+  }
+
+  return value;
+};
+
+const serializeProject = async (state: BannerState, projectId: string): Promise<{
+  document: StoredProjectDocument;
+  assets: ProjectAssetRecord[];
+}> => {
+  const assetRecords = new Map<string, ProjectAssetRecord>();
+  const serializedElements = [];
+
+  for (const element of state.elements) {
+    const content =
+      element.type === 'image'
+        ? await buildStoredAssetValue(element.content, state.editorAssets, assetRecords)
+        : element.content;
+    serializedElements.push({ ...element, content });
+  }
+
+  const background: StoredProjectDocument['background'] =
+    state.background.type === 'image'
+      ? {
+          ...state.background,
+          value: await buildStoredAssetValue(state.background.value, state.editorAssets, assetRecords),
+        }
+      : state.background;
+
+  const logo = state.logo
+    ? {
+        ...state.logo,
+        image: await buildStoredAssetValue(state.logo.image, state.editorAssets, assetRecords),
+      }
+    : null;
+
+  return {
+    document: {
+      version: '2.0',
+      id: projectId,
+      name: state.projectName,
+      lastModified: Date.now(),
+      folderId: state.currentFolderId,
+      thumbnail: undefined,
+      bannerPresetId: state.bannerPresetId,
+      elements: serializedElements,
+      overrides: state.overrides,
+      bannerSizes: state.bannerSizes,
+      background,
+      logo,
+      cta: state.cta,
+    },
+    assets: [...assetRecords.values()],
+  };
+};
+
+const resolveStoredValue = async (
+  value: string | { kind: 'project-asset'; assetId: string },
+  projectId: string,
+  assets: EditorAsset[],
+) => {
+  if (typeof value === 'string') return value;
+  if (!isStoredAssetRef(value)) return '';
+
+  const existing = assets.find((asset) => asset.id === value.assetId);
+  if (existing) return existing.src;
+
+  const blob = await getProjectAssetBlob(projectId, value.assetId);
+  if (!blob) return '';
+
+  const asset = await createEditorAssetFromBlob(blob, { id: value.assetId });
+  assets.push(asset);
+  return asset.src;
+};
+
+const hydrateStoredProject = async (document: StoredProjectDocument): Promise<{
+  project: SavedProject;
+  editorAssets: EditorAsset[];
+}> => {
+  const editorAssets: EditorAsset[] = [];
+  const elements: BannerElement[] = [];
+
+  for (const element of document.elements) {
+    const content = await resolveStoredValue(element.content, document.id, editorAssets);
+    elements.push({ ...element, content });
+  }
+
+  const background: BackgroundConfig =
+    document.background.type === 'image'
+      ? {
+          ...document.background,
+          value: await resolveStoredValue(document.background.value, document.id, editorAssets),
+        }
+      : {
+          ...document.background,
+          value: document.background.value as string,
+        };
+
+  const logo = document.logo
+    ? {
+        ...document.logo,
+        image: await resolveStoredValue(document.logo.image, document.id, editorAssets),
+      }
+    : null;
+
+  return {
+    project: {
+      id: document.id,
+      name: document.name,
+      lastModified: document.lastModified,
+      folderId: document.folderId ?? null,
+      thumbnail: document.thumbnail,
+      bannerPresetId: document.bannerPresetId,
+      elements,
+      overrides: document.overrides,
+      bannerSizes: normalizeBannerSizesForPreset(document.bannerPresetId, document.bannerSizes),
+      background,
+      logo,
+      cta: document.cta,
+    },
+    editorAssets,
+  };
+};
+
+const buildPortableProject = async (state: BannerState): Promise<PortableProjectFile> => {
+  const referencedAssetSources = collectReferencedAssetSources(state);
+  const referencedAssets = state.editorAssets.filter((asset) => referencedAssetSources.has(asset.src));
+  const assets = await Promise.all(
+    referencedAssets.map(async (asset) => ({
+      assetId: asset.id,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      dataUrl: await blobToDataUrl(asset.blob),
+    })),
+  );
+  const assetIds = new Set(assets.map((asset) => asset.assetId));
+  const toPortableValue = (value: string) => {
+    const asset = getAssetBySrc(state.editorAssets, value);
+    if (asset && assetIds.has(asset.id)) {
+      return createStoredAssetRef(asset.id);
+    }
+    return value;
+  };
+
+  return {
+    version: '2.0',
+    projectName: state.projectName,
+    bannerPresetId: state.bannerPresetId,
+    lastSaved: Date.now(),
+    elements: state.elements.map((element) => ({
+      ...element,
+      content: element.type === 'image' ? toPortableValue(element.content) : element.content,
+    })),
+    overrides: state.overrides,
+    bannerSizes: normalizeBannerSizesForPreset(state.bannerPresetId, state.bannerSizes),
+    background: (state.background.type === 'image'
+      ? { ...state.background, value: toPortableValue(state.background.value) }
+      : state.background) as PortableProjectFile['background'],
+    logo: state.logo ? { ...state.logo, image: toPortableValue(state.logo.image) } : null,
+    cta: state.cta,
+    assets,
+  };
+};
+
+const hydratePortableProject = async (
+  data: PortableProjectFile,
+): Promise<{
+  bannerPresetId: BannerPresetId;
+  bannerSizes: BannerSize[];
+  elements: BannerElement[];
+  overrides: Record<string, Record<string, Override>>;
+  background: BackgroundConfig;
+  logo: LogoConfig | null;
+  cta: CTAConfig | null;
+  editorAssets: EditorAsset[];
+  projectName: string;
+  lastSaved: number | null;
+}> => {
+  const editorAssets = await Promise.all(
+    (data.assets ?? []).map(async (asset) =>
+      createEditorAssetFromBlob(await dataUrlToBlob(asset.dataUrl), {
+        id: asset.assetId,
+        name: asset.name,
+      }),
+    ),
+  );
+
+  const resolvePortableValue = async (
+    value: string | { kind: 'project-asset'; assetId: string },
+  ): Promise<string> => {
+    if (typeof value === 'string') {
+      if (isDataUrl(value)) {
+        const asset = await createEditorAssetFromBlob(await dataUrlToBlob(value));
+        editorAssets.push(asset);
+        return asset.src;
+      }
+      return value;
+    }
+
+    const asset = editorAssets.find((item) => item.id === value.assetId);
+    return asset?.src ?? '';
+  };
+
+  const elements: BannerElement[] = [];
+  for (const element of data.elements) {
+    const content = await resolvePortableValue(element.content);
+    elements.push({ ...element, content });
+  }
+
+  const background: BackgroundConfig =
+    data.background.type === 'image'
+      ? {
+          ...data.background,
+          value: await resolvePortableValue(data.background.value),
+        }
+      : {
+          ...data.background,
+          value: data.background.value as string,
+        };
+
+  const logo = data.logo
+    ? {
+        ...data.logo,
+        image: await resolvePortableValue(data.logo.image),
+      }
+    : null;
+
+  return {
+    bannerPresetId: getFallbackPresetId(data.bannerPresetId),
+    bannerSizes: normalizeBannerSizesForPreset(
+      getFallbackPresetId(data.bannerPresetId),
+      data.bannerSizes ?? getBannerSizesForPreset(getFallbackPresetId(data.bannerPresetId)),
+    ),
+    elements,
+    overrides: data.overrides ?? {},
+    background,
+    logo,
+    cta: data.cta ?? null,
+    editorAssets,
+    projectName: data.projectName ?? 'Imported Campaign',
+    lastSaved: data.lastSaved ?? null,
+  };
+};
+
+const getDefaultBannerSizes = () => getBannerSizesForPreset(defaultBannerPresetId);
+
 export const useBannerStore = create<BannerState>((set, get) => ({
-    elements: [
-        {
-            id: '1',
-            type: 'text',
-            content: 'Banner Spore',
-            x: 10,
-            y: 10,
-            width: 80,
-            height: 20,
-            rotation: 0,
-            aspectRatioLocked: true,
-            aspectRatio: 4, // 80/20 = 4 (assuming square master)
-            style: { color: '#000000', fontSize: '100px', fontWeight: 'bold', textAlign: 'center', fontFamily: 'Inter' }
-        },
-        {
-            id: '2',
-            type: 'shape',
-            content: '#3b82f6',
-            x: 30,
-            y: 40,
-            width: 40,
-            height: 40,
-            rotation: 0,
-            aspectRatioLocked: true,
-            aspectRatio: 1,
-            shapeType: 'rectangle',
-        }
-    ],
-    overrides: {},
-    selectedElementId: null,
-    selectedBannerId: null,
-    isolatedBannerId: null,
-    background: { type: 'solid', value: '#ffffff' },
-    logo: null,
-    cta: null,
-    projectName: 'Untitled Project',
-    currentProjectId: null,
-    lastSaved: null,
-    showGallery: false,
-    bannerSizes: [
-        // Horizontal Category - Master controls all horizontal
-        { id: 'master-horizontal', name: 'Master Landscape (1.91:1)', width: 1200, height: 628, category: 'horizontal', isMaster: true },
-        { id: 'landscape-min', name: 'Landscape Min 600x314', width: 600, height: 314, category: 'horizontal' },
+  elements: createDefaultElements(),
+  overrides: {},
+  selectedElementId: null,
+  selectedBannerId: null,
+  bannerPresetId: defaultBannerPresetId,
+  bannerSizes: getDefaultBannerSizes(),
+  background: createDefaultBackground(),
+  isolatedBannerId: null,
+  logo: createDefaultLogo(),
+  cta: createDefaultCTA(),
+  projectName: 'Untitled Campaign',
+  currentProjectId: null,
+  currentFolderId: null,
+  lastSaved: null,
+  showGallery: false,
+  editorAssets: [],
 
-        // Square Category - Master controls all squares
-        { id: 'master-square', name: 'Master Square (1:1)', width: 1200, height: 1200, category: 'square', isMaster: true },
-        { id: 'square-min', name: 'Square Min 300x300', width: 300, height: 300, category: 'square' },
+  addElement: (type, content, shapeType, dimensions) =>
+    set((state) => {
+      const currentBanner =
+        state.bannerSizes.find((banner) => banner.id === state.selectedBannerId) ??
+        state.bannerSizes.find((banner) => banner.isMaster) ??
+        state.bannerSizes[0];
 
-        // Vertical Category - Master controls all vertical
-        { id: 'master-vertical', name: 'Master Vertical (4:5)', width: 960, height: 1200, category: 'vertical', isMaster: true },
-        { id: 'vertical-min', name: 'Vertical Min 480x600', width: 480, height: 600, category: 'vertical' },
-        { id: 'vertical-9-16', name: 'Vertical 900x1600', width: 900, height: 1600, category: 'vertical' },
-        { id: 'amp-portrait', name: 'AMP Size 320x480', width: 320, height: 480, category: 'vertical' },
+      let widthPercent = 0;
+      let heightPercent = 0;
+      let aspectRatio = 1;
 
-        // AMP Specific (Horizontal)
-        { id: 'amp-landscape', name: 'AMP Size 480x320', width: 480, height: 320, category: 'horizontal' },
-    ],
+      if (type === 'image' && dimensions) {
+        aspectRatio = dimensions.width / dimensions.height;
+        widthPercent = (dimensions.width / currentBanner.width) * 100;
+        const targetPixelHeight = dimensions.width / aspectRatio;
+        heightPercent = (targetPixelHeight / currentBanner.height) * 100;
+      } else {
+        const targetPixelWidth = Math.min(300, currentBanner.width * 0.4);
+        widthPercent = (targetPixelWidth / currentBanner.width) * 100;
 
-    addElement: (type, content, shapeType, dimensions) => set((state) => {
-        // Determine current banner context
-        const currentBanner = state.bannerSizes.find(b => b.id === state.selectedBannerId) || state.bannerSizes[0];
-
-        let widthPercent = 0;
-        let heightPercent = 0;
-        let aspectRatio = 1;
-
-        if (type === 'image' && dimensions) {
-            // Use native dimensions
-            aspectRatio = dimensions.width / dimensions.height;
-
-            // Map native pixels to percentage of current banner
-            widthPercent = (dimensions.width / currentBanner.width) * 100;
-
-            // Calculate height percent based on AR
-            const targetPixelHeight = dimensions.width / aspectRatio;
-            heightPercent = (targetPixelHeight / currentBanner.height) * 100;
+        if (type === 'shape' && shapeType !== 'button') {
+          aspectRatio = 1;
+          const targetPixelHeight = targetPixelWidth / aspectRatio;
+          heightPercent = (targetPixelHeight / currentBanner.height) * 100;
+        } else if (type === 'button') {
+          aspectRatio = 3;
+          const targetPixelHeight = targetPixelWidth / aspectRatio;
+          heightPercent = (targetPixelHeight / currentBanner.height) * 100;
         } else {
-            // Default width in pixels (relative to current banner)
-            // We want roughly 300px width for shapes/images, or 30% if banner is small
-            const targetPixelWidth = Math.min(300, currentBanner.width * 0.4);
-            widthPercent = (targetPixelWidth / currentBanner.width) * 100;
-
-            if (type === 'shape' && (shapeType === 'circle' || shapeType === 'rectangle' || shapeType === 'rounded-rectangle')) {
-                // Force 1:1 aspect ratio for shapes initially
-                aspectRatio = 1;
-                const targetPixelHeight = targetPixelWidth / aspectRatio;
-                heightPercent = (targetPixelHeight / currentBanner.height) * 100;
-            } else if (type === 'button') {
-                aspectRatio = 3; // 3:1 for buttons
-                const targetPixelHeight = targetPixelWidth / aspectRatio;
-                heightPercent = (targetPixelHeight / currentBanner.height) * 100;
-            } else {
-                // Text or Image default (fallback if no dimensions)
-                aspectRatio = type === 'text' ? 4 : 1.5; // Default AR
-                const targetPixelHeight = targetPixelWidth / aspectRatio;
-                heightPercent = (targetPixelHeight / currentBanner.height) * 100;
-            }
+          aspectRatio = type === 'text' ? 4 : 1.5;
+          const targetPixelHeight = targetPixelWidth / aspectRatio;
+          heightPercent = (targetPixelHeight / currentBanner.height) * 100;
         }
+      }
+
+      return {
+        elements: [
+          ...state.elements,
+          {
+            id: uuidv4(),
+            type,
+            content,
+            x: 50 - widthPercent / 2,
+            y: 50 - heightPercent / 2,
+            width: widthPercent,
+            height: heightPercent,
+            rotation: 0,
+            aspectRatioLocked: type === 'shape' ? false : true,
+            aspectRatio,
+            shapeType:
+              type === 'shape'
+                ? ((shapeType as BannerElement['shapeType']) ?? 'rectangle')
+                : undefined,
+            style:
+              type === 'text'
+                ? { color: '#000000', fontSize: '100px', fontFamily: 'Inter' }
+                : type === 'button'
+                  ? {
+                       backgroundColor: '#19C37D',
+                      color: '#ffffff',
+                      fontSize: '60px',
+                      borderRadius: '8px',
+                      fontFamily: 'Inter',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }
+                  : {},
+          },
+        ],
+      };
+    }),
+
+  addImageElementFromBlob: async (blob, name) => {
+    const asset = await createEditorAssetFromBlob(blob, { name });
+    set((state) => ({ editorAssets: [...state.editorAssets, asset] }));
+    get().addElement('image', asset.src, undefined, {
+      width: asset.width ?? 300,
+      height: asset.height ?? 300,
+    });
+  },
+
+  setBackgroundImageFromBlob: async (blob, name) => {
+    const asset = await createEditorAssetFromBlob(blob, { name });
+    set((state) => {
+      const background = { type: 'image', value: asset.src } as BackgroundConfig;
+      return {
+        background,
+        editorAssets: buildNextEditorAssets(state, {
+          background,
+          editorAssets: [...state.editorAssets, asset],
+        }),
+      };
+    });
+  },
+
+  setLogoFromBlob: async (blob, name) => {
+    const asset = await createEditorAssetFromBlob(blob, { name });
+    set((state) => {
+      const logo = {
+        image: asset.src,
+        position: state.logo?.position ?? 'top-left',
+        size: state.logo?.size ?? 15,
+        padding: state.logo?.padding ?? 20,
+      } satisfies LogoConfig;
+
+      return {
+        logo,
+        editorAssets: buildNextEditorAssets(state, {
+          logo,
+          editorAssets: [...state.editorAssets, asset],
+        }),
+      };
+    });
+  },
+
+  updateElement: (id, updates) =>
+    set((state) => ({
+      elements: state.elements.map((element) =>
+        element.id === id ? { ...element, ...updates } : element,
+      ),
+    })),
+
+  setOverride: (bannerId, elementId, override) =>
+    set((state) => {
+      const banner = state.bannerSizes.find((item) => item.id === bannerId);
+
+      if (!state.isolatedBannerId && isGlobalSquareMaster(banner)) {
+        const elements = state.elements.map((element) =>
+          element.id === elementId ? applyPatchToElement(element, override) : element,
+        );
+
+        const bannerById = new Map(state.bannerSizes.map((item) => [item.id, item]));
+        const nextOverrides = Object.fromEntries(
+          Object.entries(state.overrides)
+            .map(([targetBannerId, targetOverrides]) => {
+              const currentOverride = targetOverrides[elementId];
+              if (!currentOverride) {
+                return [targetBannerId, targetOverrides];
+              }
+
+              const shouldStrip = shouldSquareMasterStripOverride(
+                bannerById.get(targetBannerId),
+                bannerId,
+                currentOverride,
+              );
+              if (!shouldStrip) {
+                return [targetBannerId, targetOverrides];
+              }
+
+              const strippedOverride = stripOverridePatch(currentOverride, override);
+              if (!strippedOverride) {
+                const remainingOverrides = { ...targetOverrides };
+                delete remainingOverrides[elementId];
+                return [targetBannerId, remainingOverrides];
+              }
+
+              return [
+                targetBannerId,
+                {
+                  ...targetOverrides,
+                  [elementId]: strippedOverride,
+                },
+              ];
+            })
+            .filter(([, targetOverrides]) => Object.keys(targetOverrides).length > 0),
+        );
 
         return {
-            elements: [...state.elements, {
-                id: uuidv4(),
-                type,
-                content,
-                x: 50 - (widthPercent / 2), // Center it
-                y: 50 - (heightPercent / 2),
-                width: widthPercent,
-                height: heightPercent,
-                rotation: 0,
-                aspectRatioLocked: type === 'shape' ? false : true, // Unlock shapes by default
-                aspectRatio: aspectRatio,
-                shapeType: type === 'shape' ? (shapeType as BannerElement['shapeType'] || 'rectangle') : undefined,
-                style: type === 'text' ? { color: '#000000', fontSize: '100px', fontFamily: 'Inter' } :
-                    type === 'button' ? { backgroundColor: '#3b82f6', color: '#ffffff', fontSize: '60px', borderRadius: '8px', fontFamily: 'Inter', display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}
-            }]
+          elements,
+          overrides: nextOverrides,
+          editorAssets: buildNextEditorAssets(state, { elements }),
         };
+      }
+
+      const nextOverrides = { ...state.overrides };
+      nextOverrides[bannerId] = {
+        ...(nextOverrides[bannerId] ?? {}),
+        [elementId]: mergeOverride(nextOverrides[bannerId]?.[elementId], {
+          ...override,
+          isAutoPropagated: false,
+        }),
+      };
+
+      if (state.isolatedBannerId) {
+        return { overrides: nextOverrides };
+      }
+
+      if (banner?.isMaster) {
+        for (const target of state.bannerSizes) {
+          if (target.id === banner.id || target.category !== banner.category) continue;
+          nextOverrides[target.id] = {
+            ...(nextOverrides[target.id] ?? {}),
+            [elementId]: mergeOverride(nextOverrides[target.id]?.[elementId], {
+              ...override,
+              isAutoPropagated: true,
+            }),
+          };
+        }
+      }
+
+      return { overrides: nextOverrides };
     }),
 
-    updateElement: (id, updates) => set((state) => ({
-        elements: state.elements.map((el) => el.id === id ? { ...el, ...updates } : el)
-    })),
-
-    setOverride: (bannerId, elementId, override) => set((state) => {
-        const banner = state.bannerSizes.find(b => b.id === bannerId);
-        const newOverrides = { ...state.overrides };
-
-        // Helper to merge styles if present
-        const mergeOverride = (existing: Override | undefined, newOv: Override): Override => {
-            const merged = { ...(existing || {}), ...newOv };
-            if (newOv.style && existing?.style) {
-                merged.style = { ...existing.style, ...newOv.style };
-            }
-            return merged;
-        };
-
-        // Apply override to the current banner
-        newOverrides[bannerId] = {
-            ...(newOverrides[bannerId] || {}),
-            [elementId]: mergeOverride(newOverrides[bannerId]?.[elementId], { ...override, isAutoPropagated: false })
-        };
-
-        // If a banner is isolated, ONLY edit that banner (no propagation)
-        if (state.isolatedBannerId) {
-            // Only apply changes to the isolated banner, skip all propagation
-            return { overrides: newOverrides };
-        }
-
-        // If this is a master banner, propagate according to hierarchy
-        if (banner?.isMaster) {
-            if (bannerId === 'master-square') {
-                // Square Master affects EVERYONE (Square, Horizontal, Vertical)
-                state.bannerSizes.forEach(b => {
-                    if (b.id !== bannerId) {
-                        newOverrides[b.id] = {
-                            ...(newOverrides[b.id] || {}),
-                            [elementId]: mergeOverride(newOverrides[b.id]?.[elementId], { ...override, isAutoPropagated: true })
-                        };
-                    }
-                });
-            } else if (bannerId === 'master-horizontal') {
-                // Horizontal Master affects only Horizontal banners
-                state.bannerSizes.forEach(b => {
-                    if (b.category === 'horizontal' && b.id !== bannerId) {
-                        newOverrides[b.id] = {
-                            ...(newOverrides[b.id] || {}),
-                            [elementId]: mergeOverride(newOverrides[b.id]?.[elementId], { ...override, isAutoPropagated: true })
-                        };
-                    }
-                });
-            } else if (bannerId === 'master-vertical') {
-                // Vertical Master affects only Vertical banners
-                state.bannerSizes.forEach(b => {
-                    if (b.category === 'vertical' && b.id !== bannerId) {
-                        newOverrides[b.id] = {
-                            ...(newOverrides[b.id] || {}),
-                            [elementId]: mergeOverride(newOverrides[b.id]?.[elementId], { ...override, isAutoPropagated: true })
-                        };
-                    }
-                });
-            }
-        }
-
-        return { overrides: newOverrides };
+  selectElement: (id) => set({ selectedElementId: id }),
+  selectBanner: (id) => set({ selectedBannerId: id }),
+  setBannerPreset: (presetId) =>
+    set({
+      bannerPresetId: presetId,
+      bannerSizes: normalizeBannerSizesForPreset(presetId, getBannerSizesForPreset(presetId)),
+      selectedBannerId: null,
+      isolatedBannerId: null,
     }),
-
-    selectElement: (id) => set({ selectedElementId: id }),
-    selectBanner: (id) => set({ selectedBannerId: id }),
-
-    setIsolatedBanner: (bannerId) => set({ isolatedBannerId: bannerId }),
-
-    setLogo: (logo) => set({ logo }),
-
-    updateLogo: (updates) => set((state) => ({
-        logo: state.logo ? { ...state.logo, ...updates } : null
+  setIsolatedBanner: (bannerId) => set({ isolatedBannerId: bannerId }),
+  setLogo: (logo) =>
+    set((state) => ({
+      logo,
+      editorAssets: buildNextEditorAssets(state, { logo }),
     })),
-
-    setCTA: (cta) => set({ cta }),
-
-    updateCTA: (updates) => set((state) => ({
-        cta: state.cta ? { ...state.cta, ...updates } : null
+  updateLogo: (updates) =>
+    set((state) => ({
+      logo: state.logo ? { ...state.logo, ...updates } : null,
     })),
-
-    setProjectName: (name) => set({ projectName: name }),
-
-    setShowGallery: (show) => set({ showGallery: show }),
-
-    getAllProjects: async () => {
-        try {
-            const projectsStr = await idbGet('banner-spore-projects');
-            if (!projectsStr) return [];
-            return JSON.parse(projectsStr) as SavedProject[];
-        } catch (e) {
-            console.error('Failed to get projects:', e);
-            return [];
-        }
-    },
-
-    getAllFolders: async () => {
-        try {
-            const foldersStr = await idbGet('banner-spore-folders');
-            if (!foldersStr) return [];
-            return JSON.parse(foldersStr) as Folder[];
-        } catch (e) {
-            console.error('Failed to get folders:', e);
-            return [];
-        }
-    },
-
-    createFolder: async (name, color) => {
-        const newFolder: Folder = {
-            id: uuidv4(),
-            name,
-            color: color || '#3b82f6',
-            createdAt: Date.now(),
-        };
-
-        const existingFolders = await get().getAllFolders();
-        existingFolders.push(newFolder);
-        await idbSet('banner-spore-folders', JSON.stringify(existingFolders));
-        console.log('✅ Folder created:', name);
-    },
-
-    renameFolder: async (id, newName) => {
-        const folders = await get().getAllFolders();
-        const folder = folders.find(f => f.id === id);
-        if (folder) {
-            folder.name = newName;
-            await idbSet('banner-spore-folders', JSON.stringify(folders));
-            console.log('✅ Folder renamed:', newName);
-        }
-    },
-
-    deleteFolder: async (id) => {
-        // Remove folder
-        const folders = (await get().getAllFolders()).filter(f => f.id !== id);
-        await idbSet('banner-spore-folders', JSON.stringify(folders));
-
-        // Move all projects in this folder to root
-        const projects = await get().getAllProjects();
-        projects.forEach(project => {
-            if (project.folderId === id) {
-                project.folderId = null;
-            }
-        });
-        await idbSet('banner-spore-projects', JSON.stringify(projects));
-        console.log('✅ Folder deleted and projects moved to root');
-    },
-
-    moveProjectToFolder: async (projectId, folderId) => {
-        const projects = await get().getAllProjects();
-        const project = projects.find(p => p.id === projectId);
-        if (project) {
-            project.folderId = folderId;
-            project.lastModified = Date.now();
-            await idbSet('banner-spore-projects', JSON.stringify(projects));
-            console.log('✅ Project moved to folder:', folderId || 'root');
-        }
-    },
-
-    saveCurrentProject: async () => {
-        const state = get();
-        const projects = await state.getAllProjects();
-
-        const projectData: SavedProject = {
-            id: state.currentProjectId || `project-${Date.now()}`,
-            name: state.projectName,
-            lastModified: Date.now(),
-            elements: state.elements,
-            overrides: state.overrides,
-            bannerSizes: state.bannerSizes,
-            background: state.background,
-            logo: state.logo,
-            cta: state.cta,
-        };
-
-        // Update or add project
-        const existingIndex = projects.findIndex(p => p.id === projectData.id);
-        if (existingIndex >= 0) {
-            projects[existingIndex] = projectData;
-        } else {
-            projects.push(projectData);
-        }
-
-        try {
-            await idbSet('banner-spore-projects', JSON.stringify(projects));
-            set({
-                currentProjectId: projectData.id,
-                lastSaved: Date.now()
-            });
-            console.log('✅ Project saved:', projectData.name);
-        } catch (e) {
-            console.error('Failed to save project:', e);
-            alert('Failed to save project. Your browser storage might be full.');
-        }
-    },
-
-    loadProjectById: async (id) => {
-        const state = get();
-        const projects = await state.getAllProjects();
-        const project = projects.find(p => p.id === id);
-
-        if (!project) {
-            alert('Project not found');
-            return;
-        }
-
-        set({
-            currentProjectId: project.id,
-            projectName: project.name,
-            elements: project.elements,
-            overrides: project.overrides,
-            bannerSizes: project.bannerSizes,
-            background: project.background,
-            logo: project.logo,
-            cta: project.cta,
-            lastSaved: project.lastModified,
-            selectedElementId: null,
-            selectedBannerId: null,
-            isolatedBannerId: null,
-            showGallery: false,
-        });
-
-        console.log('✅ Project loaded:', project.name);
-    },
-
-    createNewProject: async (name, folderId) => {
-        set({
-            currentProjectId: null, // Will be set on first save
-            projectName: name,
-            elements: [
-                {
-                    id: '1',
-                    type: 'text',
-                    content: 'Your Banner Text',
-                    x: 10,
-                    y: 40,
-                    width: 80,
-                    height: 20,
-                    rotation: 0,
-                    aspectRatioLocked: true,
-                    aspectRatio: 4,
-                    style: { color: '#000000', fontSize: '100px', fontWeight: 'bold', textAlign: 'center', fontFamily: 'Inter' }
-                },
-            ],
-            overrides: {},
-            background: { type: 'solid', value: '#ffffff' },
-            logo: null,
-            cta: null,
-            lastSaved: null,
-            selectedElementId: null,
-            selectedBannerId: null,
-            isolatedBannerId: null,
-            showGallery: false,
-        });
-
-        // Save immediately with folder assignment
-        const savedState = get();
-        const newProjectId = uuidv4();
-        const newProject: SavedProject = {
-            id: newProjectId,
-            name: savedState.projectName,
-            lastModified: Date.now(),
-            folderId: folderId || null,
-            elements: savedState.elements,
-            overrides: savedState.overrides,
-            bannerSizes: savedState.bannerSizes,
-            background: savedState.background,
-            logo: savedState.logo,
-            cta: savedState.cta,
-        };
-
-        const existingProjectsStr = await idbGet('banner-spore-projects');
-        const existingProjects = existingProjectsStr ? JSON.parse(existingProjectsStr) : [];
-        existingProjects.push(newProject);
-        await idbSet('banner-spore-projects', JSON.stringify(existingProjects));
-
-        set({ currentProjectId: newProjectId, lastSaved: newProject.lastModified });
-        console.log('✅ New project created:', name, 'in folder:', folderId || 'root');
-    },
-
-    deleteProject: async (id) => {
-        const state = get();
-        const projects = await state.getAllProjects();
-        const filtered = projects.filter(p => p.id !== id);
-
-        try {
-            await idbSet('banner-spore-projects', JSON.stringify(filtered));
-            console.log('✅ Project deleted');
-        } catch (e) {
-            console.error('Failed to delete project:', e);
-        }
-    },
-
-    duplicateProject: async (id) => {
-        const state = get();
-        const projects = await state.getAllProjects();
-        const original = projects.find(p => p.id === id);
-
-        if (!original) return;
-
-        const duplicate: SavedProject = {
-            ...original,
-            id: `project-${Date.now()}`,
-            name: `${original.name} (Copy)`,
-            lastModified: Date.now(),
-        };
-
-        projects.push(duplicate);
-
-        try {
-            await idbSet('banner-spore-projects', JSON.stringify(projects));
-            console.log('✅ Project duplicated');
-        } catch (e) {
-            console.error('Failed to duplicate project:', e);
-        }
-    },
-
-    renameProject: async (id, newName) => {
-        const state = get();
-        const projects = await state.getAllProjects();
-        const project = projects.find(p => p.id === id);
-
-        if (!project) return;
-
-        project.name = newName;
-        project.lastModified = Date.now();
-
-        try {
-            await idbSet('banner-spore-projects', JSON.stringify(projects));
-
-            // If this is the current project, update the name in state too
-            if (state.currentProjectId === id) {
-                set({ projectName: newName });
-            }
-
-            console.log('✅ Project renamed');
-        } catch (e) {
-            console.error('Failed to rename project:', e);
-        }
-    },
-
-    saveToLocalStorage: async () => {
-        // Redirect to saveCurrentProject for compatibility
-        await get().saveCurrentProject();
-    },
-
-    loadFromLocalStorage: async () => {
-        // Load the most recent project
-        const projects = await get().getAllProjects();
-        if (projects.length === 0) return false;
-
-        // Sort by lastModified and load most recent
-        const mostRecent = projects.sort((a, b) => b.lastModified - a.lastModified)[0];
-        await get().loadProjectById(mostRecent.id);
-        return true;
-    },
-
-    removeElement: (id) => set((state) => ({
-        elements: state.elements.filter((el) => el.id !== id),
-        selectedElementId: state.selectedElementId === id ? null : state.selectedElementId
+  setCTA: (cta) => set({ cta }),
+  updateCTA: (updates) =>
+    set((state) => ({
+      cta: state.cta ? { ...state.cta, ...updates } : null,
     })),
+  setProjectName: (name) => set({ projectName: name }),
+  setShowGallery: (show) => set({ showGallery: show }),
 
-    reorderElement: (id, direction) => set((state) => {
-        const index = state.elements.findIndex(el => el.id === id);
-        if (index === -1) return state;
+  getAllProjects: async () => listProjects(),
+  getAllFolders: async () => listFolders(),
 
-        const newElements = [...state.elements];
-        const [movedElement] = newElements.splice(index, 1);
+  createFolder: async (name, color) => {
+    await createFolderRecord({
+      id: uuidv4(),
+      name,
+      color: color || '#19C37D',
+      createdAt: Date.now(),
+    });
+  },
 
-        if (direction === 'up' && index < newElements.length) {
-            newElements.splice(index + 1, 0, movedElement);
-        } else if (direction === 'down' && index > 0) {
-            newElements.splice(index - 1, 0, movedElement);
-        } else if (direction === 'top') {
-            newElements.push(movedElement);
-        } else if (direction === 'bottom') {
-            newElements.unshift(movedElement);
-        } else {
-            // If invalid move, put it back
-            newElements.splice(index, 0, movedElement);
-        }
+  renameFolder: async (id, newName) => {
+    await renameFolderRecord(id, newName);
+  },
 
-        return { elements: newElements };
-    }),
-
-    setBackground: (bg) => set({ background: bg }),
-
-    saveProject: () => {
-        const state = get();
-        const projectData = {
-            version: '1.0',
-            projectName: state.projectName,
-            lastSaved: Date.now(),
-            elements: state.elements,
-            overrides: state.overrides,
-            bannerSizes: state.bannerSizes,
-            background: state.background,
-            isolatedBannerId: state.isolatedBannerId,
-            logo: state.logo,
-            cta: state.cta,
-        };
-        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const fileName = state.projectName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        a.download = `${fileName || 'banner-spore-project'}-${new Date().toISOString().slice(0, 10)}.bsp`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    },
-
-    loadProject: (jsonString) => {
-        try {
-            const data = JSON.parse(jsonString);
-            if (!data.elements || !data.background) {
-                alert('Invalid project file');
-                return;
-            }
-            set({
-                elements: data.elements,
-                overrides: data.overrides || {},
-                background: data.background,
-                bannerSizes: data.bannerSizes || get().bannerSizes,
-                isolatedBannerId: data.isolatedBannerId || null,
-                logo: data.logo || null,
-                cta: data.cta || null,
-                projectName: data.projectName || 'Imported Project',
-                lastSaved: data.lastSaved || null,
-                selectedElementId: null,
-                selectedBannerId: null
-            });
-        } catch (e) {
-            console.error('Failed to load project:', e);
-            alert('Failed to load project file');
-        }
+  deleteFolder: async (id) => {
+    await deleteFolderRecord(id);
+    if (get().currentFolderId === id) {
+      set({ currentFolderId: null });
     }
+  },
+
+  moveProjectToFolder: async (projectId, folderId) => {
+    await moveProjectRecord(projectId, folderId);
+    if (get().currentProjectId === projectId) {
+      set({ currentFolderId: folderId });
+    }
+  },
+
+  saveCurrentProject: async () => {
+    const state = get();
+    const projectId = state.currentProjectId ?? `project-${Date.now()}`;
+    const { document, assets } = await serializeProject(state, projectId);
+
+    try {
+      await saveProjectDocument(document, assets);
+      set({
+        currentProjectId: projectId,
+        currentFolderId: document.folderId ?? null,
+        lastSaved: document.lastModified,
+      });
+    } catch (error) {
+      console.error('Failed to save project:', error);
+      alert('Failed to save project. Your browser storage might be full.');
+    }
+  },
+
+  loadProjectById: async (id) => {
+    const document = await getProjectDocument(id);
+    if (!document) {
+      alert('Project not found');
+      return;
+    }
+
+    const { project, editorAssets } = await hydrateStoredProject(document);
+    const previousAssets = get().editorAssets;
+    replaceEditorAssets(set, editorAssets, previousAssets);
+    set({
+      currentProjectId: project.id,
+      currentFolderId: project.folderId ?? null,
+      projectName: project.name,
+      bannerPresetId: project.bannerPresetId,
+      elements: project.elements,
+      overrides: project.overrides,
+      bannerSizes: project.bannerSizes.length
+        ? normalizeBannerSizesForPreset(project.bannerPresetId, project.bannerSizes)
+        : getBannerSizesForPreset(project.bannerPresetId),
+      background: project.background,
+      logo: project.logo,
+      cta: project.cta,
+      lastSaved: project.lastModified,
+      selectedElementId: null,
+      selectedBannerId: null,
+      isolatedBannerId: null,
+      showGallery: false,
+    });
+  },
+
+  createNewProject: async (name, folderId) => {
+    const previousAssets = get().editorAssets;
+    replaceEditorAssets(set, [], previousAssets);
+    set({
+      currentProjectId: null,
+      currentFolderId: folderId ?? null,
+      projectName: name,
+      bannerPresetId: defaultBannerPresetId,
+      bannerSizes: getBannerSizesForPreset(defaultBannerPresetId),
+      elements: createNewProjectElements(),
+      overrides: {},
+      background: createDefaultBackground(),
+      logo: createDefaultLogo(),
+      cta: createDefaultCTA(),
+      lastSaved: null,
+      selectedElementId: null,
+      selectedBannerId: null,
+      isolatedBannerId: null,
+      showGallery: false,
+    });
+    await get().saveCurrentProject();
+  },
+
+  deleteProject: async (id) => {
+    await deleteProjectRecord(id);
+    if (get().currentProjectId === id) {
+      const previousAssets = get().editorAssets;
+      replaceEditorAssets(set, [], previousAssets);
+      set({
+        currentProjectId: null,
+        currentFolderId: null,
+        projectName: 'Untitled Campaign',
+        bannerPresetId: defaultBannerPresetId,
+        bannerSizes: getBannerSizesForPreset(defaultBannerPresetId),
+        elements: createDefaultElements(),
+        overrides: {},
+        background: createDefaultBackground(),
+        logo: createDefaultLogo(),
+        cta: createDefaultCTA(),
+        lastSaved: null,
+        selectedElementId: null,
+        selectedBannerId: null,
+        isolatedBannerId: null,
+      });
+    }
+  },
+
+  duplicateProject: async (id) => {
+    const source = await getProjectDocument(id);
+    if (!source) return;
+
+    const duplicateId = `project-${Date.now()}`;
+    await duplicateProjectRecord(id, duplicateId, `${source.name} (Copy)`);
+  },
+
+  renameProject: async (id, newName) => {
+    await renameProjectRecord(id, newName);
+    if (get().currentProjectId === id) {
+      set({ projectName: newName });
+    }
+  },
+
+  saveToLocalStorage: async () => {
+    await get().saveCurrentProject();
+  },
+
+  loadFromLocalStorage: async () => {
+    const projects = await listProjects();
+    if (projects.length === 0) return false;
+    const mostRecent = [...projects].sort((left, right) => right.lastModified - left.lastModified)[0];
+    await get().loadProjectById(mostRecent.id);
+    return true;
+  },
+
+  removeElement: (id) =>
+    set((state) => {
+      const elements = state.elements.filter((element) => element.id !== id);
+      return {
+        elements,
+        editorAssets: buildNextEditorAssets(state, { elements }),
+        selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+      };
+    }),
+
+  reorderElement: (id, direction) =>
+    set((state) => {
+      const index = state.elements.findIndex((element) => element.id === id);
+      if (index === -1) return state;
+
+      const elements = [...state.elements];
+      const [moved] = elements.splice(index, 1);
+
+      if (direction === 'up' && index < elements.length) {
+        elements.splice(index + 1, 0, moved);
+      } else if (direction === 'down' && index > 0) {
+        elements.splice(index - 1, 0, moved);
+      } else if (direction === 'top') {
+        elements.push(moved);
+      } else if (direction === 'bottom') {
+        elements.unshift(moved);
+      } else {
+        elements.splice(index, 0, moved);
+      }
+
+      return { elements };
+    }),
+
+  setBackground: (background) =>
+    set((state) => ({
+      background,
+      editorAssets: buildNextEditorAssets(state, { background }),
+    })),
+
+  saveProject: async () => {
+    const state = get();
+    const portableProject = await buildPortableProject(state);
+    const blob = new Blob([JSON.stringify(portableProject, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    const fileName = state.projectName
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+    anchor.download = `${fileName || 'bannerbloom-project'}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.bsp`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  },
+
+  loadProject: async (jsonString) => {
+    try {
+      const rawData = JSON.parse(jsonString) as PortableProjectFile | Record<string, unknown>;
+      const previousAssets = get().editorAssets;
+      const normalizedData: PortableProjectFile =
+        rawData.version === '2.0'
+          ? (rawData as PortableProjectFile)
+          : {
+              version: '2.0',
+              projectName: (rawData.projectName as string) || 'Imported Campaign',
+              bannerPresetId: getFallbackPresetId(rawData.bannerPresetId as string | undefined),
+              lastSaved: (rawData.lastSaved as number) || Date.now(),
+              elements: (rawData.elements as PortableProjectFile['elements']) ?? [],
+              overrides:
+                (rawData.overrides as Record<string, Record<string, Override>>) ?? {},
+              bannerSizes: normalizeBannerSizesForPreset(
+                getFallbackPresetId(rawData.bannerPresetId as string | undefined),
+                (rawData.bannerSizes as BannerSize[]) ??
+                  getBannerSizesForPreset(
+                    getFallbackPresetId(rawData.bannerPresetId as string | undefined),
+                  ),
+              ),
+              background: (rawData.background as PortableProjectFile['background']) ?? createDefaultBackground(),
+              logo: (rawData.logo as PortableProjectFile['logo']) ?? null,
+              cta: (rawData.cta as CTAConfig | null) ?? null,
+              assets: [],
+            };
+
+      if (!normalizedData.elements || !normalizedData.background) {
+        alert('Invalid project file');
+        return;
+      }
+
+      const hydrated = await hydratePortableProject(normalizedData);
+      replaceEditorAssets(set, hydrated.editorAssets, previousAssets);
+      set({
+        currentProjectId: null,
+        currentFolderId: null,
+        elements: hydrated.elements,
+        overrides: hydrated.overrides,
+        background: hydrated.background,
+        bannerPresetId: hydrated.bannerPresetId,
+        bannerSizes: hydrated.bannerSizes,
+        isolatedBannerId: null,
+        logo: hydrated.logo,
+        cta: hydrated.cta,
+        projectName: hydrated.projectName,
+        lastSaved: hydrated.lastSaved,
+        selectedElementId: null,
+        selectedBannerId: null,
+        showGallery: false,
+      });
+    } catch (error) {
+      console.error('Failed to load project:', error);
+      alert('Failed to load project file');
+    }
+  },
 }));

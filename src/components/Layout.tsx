@@ -7,16 +7,29 @@ import { ExportPanel } from './ExportPanel';
 import { ProjectGallery } from './ProjectGallery';
 
 export const Layout: React.FC = () => {
+    const [isTopbarCollapsed, setIsTopbarCollapsed] = React.useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+    const [isInspectorCollapsed, setIsInspectorCollapsed] = React.useState(false);
+
     return (
-        <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-50 text-gray-900 font-sans">
-            <SaveBar />
-            <div className="flex-1 flex overflow-hidden relative">
-                <Sidebar />
-                <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
+        <div className="studio-shell flex h-screen min-h-0 w-screen flex-col overflow-hidden text-slate-900">
+            <SaveBar
+                isCollapsed={isTopbarCollapsed}
+                onToggleCollapse={() => setIsTopbarCollapsed((current) => !current)}
+            />
+            <div className="studio-workspace relative flex min-h-0 flex-1 overflow-hidden pt-2">
+                <Sidebar
+                    isCollapsed={isSidebarCollapsed}
+                    onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
+                />
+                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] border border-white/40 bg-white/35 shadow-[0_16px_48px_rgba(15,23,42,0.08)] backdrop-blur-sm">
                     <CanvasArea />
                     <ExportPanel />
                 </div>
-                <PropertiesPanel />
+                <PropertiesPanel
+                    isCollapsed={isInspectorCollapsed}
+                    onToggleCollapse={() => setIsInspectorCollapsed((current) => !current)}
+                />
             </div>
             <ProjectGallery />
         </div>

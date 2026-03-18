@@ -1,11 +1,17 @@
 import React from 'react';
 import type { BackgroundConfig } from '../store/bannerStore';
 import { useBannerStore } from '../store/bannerStore';
+import { getCategoryMasterSize } from '../config/bannerPresets';
+import { calculateElementLayout } from '../utils/layoutUtils';
 import {
+    ChevronDown,
+    ChevronRight,
     AlignLeft, AlignCenter, AlignRight, Trash2,
     ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
     AlignStartVertical, AlignCenterVertical, AlignEndVertical,
-    Bold, Italic, Underline, Strikethrough
+    Bold, Italic, Underline, Strikethrough,
+    PanelRightClose,
+    PanelRightOpen,
 } from 'lucide-react';
 
 const fonts = [
@@ -27,7 +33,39 @@ const fonts = [
     'Georgia'
 ];
 
-export const PropertiesPanel: React.FC = () => {
+interface PropertiesPanelProps {
+    isCollapsed: boolean;
+    onToggleCollapse: () => void;
+}
+
+const InspectorSection: React.FC<{
+    title: string;
+    defaultOpen?: boolean;
+    className?: string;
+    children: React.ReactNode;
+}> = ({ title, defaultOpen = true, className = '', children }) => {
+    const [isOpen, setIsOpen] = React.useState(defaultOpen);
+
+    return (
+        <div className={className}>
+            <button
+                type="button"
+                onClick={() => setIsOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+            >
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{title}</span>
+                {isOpen ? (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                ) : (
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                )}
+            </button>
+            {isOpen && <div className="mt-3">{children}</div>}
+        </div>
+    );
+};
+
+export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, onToggleCollapse }) => {
     const selectedElementId = useBannerStore((state) => state.selectedElementId);
     const selectedBannerId = useBannerStore((state) => state.selectedBannerId);
     const elements = useBannerStore((state) => state.elements);
@@ -42,35 +80,62 @@ export const PropertiesPanel: React.FC = () => {
 
     const background = useBannerStore((state) => state.background);
     const setBackground = useBannerStore((state) => state.setBackground);
+    const setBackgroundImageFromBlob = useBannerStore((state) => state.setBackgroundImageFromBlob);
 
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     React.useEffect(() => {
-        if (selectedElement && (selectedElement.type === 'text' || selectedElement.type === 'button')) {
-            // Give a small delay to ensure the DOM is ready if it just appeared
-            const timer = setTimeout(() => {
-                if (textareaRef.current) {
-                    textareaRef.current.focus();
-                    textareaRef.current.select();
-                }
-            }, 100);
-            return () => clearTimeout(timer);
+        if (selectedElement?.type !== 'text' && selectedElement?.type !== 'button') {
+            return;
         }
-    }, [selectedElement?.id, selectedElement]);
+
+        // Focus once when switching elements, but do not select the whole value on every render.
+        const timer = setTimeout(() => {
+            textareaRef.current?.focus();
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [selectedElement?.id, selectedElement?.type]);
+
+    if (isCollapsed) {
+        return (
+            <div className="studio-properties-panel studio-properties-panel-collapsed z-10 flex h-full min-h-0 flex-col items-center justify-start gap-4 overflow-hidden rounded-[1.35rem] border px-2 py-3 shadow-sm">
+                <button
+                    onClick={onToggleCollapse}
+                    className="studio-panel-toggle"
+                    title="Expand inspector"
+                >
+                    <PanelRightOpen className="h-4 w-4" />
+                </button>
+                <div className="studio-collapsed-rail-label">Inspector</div>
+            </div>
+        );
+    }
 
     if (!selectedElement) {
         return (
-            <div className="w-80 bg-white border-l border-gray-200 h-full overflow-y-auto p-4 space-y-6 shadow-sm z-10">
-                <h3 className="font-bold text-black text-lg border-b border-gray-200 pb-4">Banner Settings</h3>
+            <div className="studio-properties-panel z-10 h-full space-y-5 overflow-y-auto rounded-[1.35rem] border p-4 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
+                    <div>
+                        <div className="studio-section-label">Canvas</div>
+                        <h3 className="text-lg font-bold text-slate-900">Canvas background</h3>
+                    </div>
+                    <button
+                        onClick={onToggleCollapse}
+                        className="studio-panel-toggle"
+                        title="Collapse inspector"
+                    >
+                        <PanelRightClose className="h-4 w-4" />
+                    </button>
+                </div>
 
+                <InspectorSection title="Background">
                 <div className="space-y-4">
-                    <h4 className="font-bold text-sm text-black uppercase tracking-wide">Background</h4>
-
                     <div className="flex gap-2">
                         {['solid', 'gradient', 'image'].map(t => (
                             <button
                                 key={t}
                                 onClick={() => setBackground({ ...background, type: t as BackgroundConfig['type'] })}
-                                className={`flex-1 py-2 text-xs font-bold uppercase rounded border ${background.type === t ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
+                                className={`flex-1 py-2 text-xs font-bold uppercase rounded border ${background.type === t ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-white border-gray-300 text-gray-700'}`}
                             >
                                 {t}
                             </button>
@@ -172,11 +237,7 @@ export const PropertiesPanel: React.FC = () => {
                                     onChange={(e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
-                                            const reader = new FileReader();
-                                            reader.onload = (ev) => {
-                                                setBackground({ ...background, value: ev.target?.result as string });
-                                            };
-                                            reader.readAsDataURL(file);
+                                            void setBackgroundImageFromBlob(file, file.name);
                                         }
                                     }}
                                 />
@@ -191,6 +252,7 @@ export const PropertiesPanel: React.FC = () => {
                         </div>
                     )}
                 </div>
+                </InspectorSection>
             </div>
         );
     }
@@ -203,7 +265,8 @@ export const PropertiesPanel: React.FC = () => {
         style: { ...selectedElement.style, ...override?.style }
     };
 
-    const isMaster = selectedBannerId ? bannerSizes.find(b => b.id === selectedBannerId)?.isMaster : true;
+    const selectedBanner = selectedBannerId ? bannerSizes.find(b => b.id === selectedBannerId) : undefined;
+    const isMaster = selectedBanner ? selectedBanner.isMaster : true;
 
     const handleChange = (field: string, value: string | number | boolean) => {
         // Special case for properties that should always be global
@@ -229,14 +292,69 @@ export const PropertiesPanel: React.FC = () => {
         }
     };
 
+    const alignElementToBanner = (axis: 'x' | 'y', mode: 'start' | 'center' | 'end') => {
+        const fallbackValue =
+            axis === 'x'
+                ? mode === 'start'
+                    ? 0
+                    : mode === 'center'
+                        ? 50 - effectiveElement.width / 2
+                        : 100 - effectiveElement.width
+                : mode === 'start'
+                    ? 0
+                    : mode === 'center'
+                        ? 50 - effectiveElement.height / 2
+                        : 100 - effectiveElement.height;
+
+        if (!selectedBannerId || !selectedBanner) {
+            handleChange(axis, fallbackValue);
+            return;
+        }
+
+        const masterHeight =
+            getCategoryMasterSize(bannerSizes, selectedBanner.category)?.height ?? selectedBanner.height;
+        const layout = calculateElementLayout(
+            selectedElement,
+            overrides[selectedBannerId],
+            selectedBanner.width,
+            selectedBanner.height,
+            selectedBanner.category,
+            1,
+            masterHeight,
+        );
+
+        const bannerSize = axis === 'x' ? selectedBanner.width : selectedBanner.height;
+        const storedSizePercent = axis === 'x' ? layout.w : layout.h;
+        const basePixelSize = (storedSizePercent / 100) * bannerSize;
+        const renderedPixelSize = axis === 'x' ? layout.pixelW : layout.pixelH;
+        const delta = basePixelSize - renderedPixelSize;
+        const desiredPixelPosition =
+            mode === 'start'
+                ? 0
+                : mode === 'center'
+                    ? (bannerSize - renderedPixelSize) / 2
+                    : bannerSize - renderedPixelSize;
+
+        const denominator = bannerSize + delta;
+        const computedValue =
+            Math.abs(denominator) < 0.0001
+                ? fallbackValue
+                : (100 * desiredPixelPosition - (storedSizePercent * delta) / 2) / denominator;
+
+        handleChange(axis, Number.isFinite(computedValue) ? Math.round(computedValue * 1000) / 1000 : fallbackValue);
+    };
+
     return (
-        <div className="w-80 bg-white border-l border-gray-200 h-full overflow-y-auto p-4 space-y-6 shadow-sm z-10">
-            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-                <h3 className="font-bold text-black text-lg">Properties</h3>
+        <div className="studio-properties-panel z-10 h-full space-y-5 overflow-y-auto rounded-[1.35rem] border p-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
+                <div>
+                    <div className="studio-section-label">Inspector</div>
+                    <h3 className="text-lg font-bold text-slate-900">Element inspector</h3>
+                </div>
                 <div className="flex items-center gap-2">
                     {!isMaster && (
-                        <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded font-medium">
-                            Override Mode
+                        <span className="studio-pill studio-pill-success px-2.5 py-1 text-[0.68rem]">
+                            Placement override
                         </span>
                     )}
                     <button
@@ -246,45 +364,53 @@ export const PropertiesPanel: React.FC = () => {
                     >
                         <Trash2 size={20} />
                     </button>
+                    <button
+                        onClick={onToggleCollapse}
+                        className="studio-panel-toggle"
+                        title="Collapse inspector"
+                    >
+                        <PanelRightClose className="h-4 w-4" />
+                    </button>
                 </div>
             </div>
 
             {/* Common Properties */}
-            <div className="space-y-5">
+            <InspectorSection title="Placement">
+            <div className="space-y-4">
                 {/* Alignment */}
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-black uppercase tracking-wide">Alignment</label>
                     <div className="grid grid-cols-3 gap-2">
                         <button
-                            onClick={() => handleChange('x', 0)}
+                            onClick={() => alignElementToBanner('x', 'start')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Left"
                         >
                             <AlignLeft size={18} />
                         </button>
                         <button
-                            onClick={() => handleChange('x', 50 - effectiveElement.width / 2)}
+                            onClick={() => alignElementToBanner('x', 'center')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Center"
                         >
                             <AlignCenter size={18} />
                         </button>
                         <button
-                            onClick={() => handleChange('x', 100 - effectiveElement.width)}
+                            onClick={() => alignElementToBanner('x', 'end')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Right"
                         >
                             <AlignRight size={18} />
                         </button>
                         <button
-                            onClick={() => handleChange('y', 0)}
+                            onClick={() => alignElementToBanner('y', 'start')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Top"
                         >
                             <ArrowUp size={18} className="rotate-0" />
                         </button>
                         <button
-                            onClick={() => handleChange('y', 50 - effectiveElement.height / 2)}
+                            onClick={() => alignElementToBanner('y', 'center')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Middle"
                         >
@@ -294,7 +420,7 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
                         </button>
                         <button
-                            onClick={() => handleChange('y', 100 - effectiveElement.height)}
+                            onClick={() => alignElementToBanner('y', 'end')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
                             title="Align Bottom"
                         >
@@ -338,7 +464,7 @@ export const PropertiesPanel: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-bold text-black mb-1.5">X Position (%)</label>
                         <input
@@ -354,7 +480,7 @@ export const PropertiesPanel: React.FC = () => {
                             type="number"
                             value={Math.round(effectiveElement.y)}
                             onChange={(e) => handleChange('y', Number(e.target.value))}
-                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         />
                     </div>
                     <div>
@@ -363,7 +489,7 @@ export const PropertiesPanel: React.FC = () => {
                             type="number"
                             value={Math.round(effectiveElement.width)}
                             onChange={(e) => handleChange('width', Number(e.target.value))}
-                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         />
                     </div>
                     <div>
@@ -372,14 +498,14 @@ export const PropertiesPanel: React.FC = () => {
                             type="number"
                             value={Math.round(effectiveElement.height)}
                             onChange={(e) => handleChange('height', Number(e.target.value))}
-                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full p-2 border border-gray-300 rounded text-sm text-black focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         />
                     </div>
                 </div>
 
                 {/* Rotation */}
                 <div>
-                    <label className="block text-xs font-bold text-black mb-1.5">Rotation ({Math.round(effectiveElement.rotation || 0)}°)</label>
+                    <label className="block text-xs font-bold text-black mb-1.5">Rotation ({Math.round(effectiveElement.rotation || 0)} deg)</label>
                     <div className="flex items-center gap-2">
                         <input
                             type="range"
@@ -387,7 +513,7 @@ export const PropertiesPanel: React.FC = () => {
                             max="360"
                             value={effectiveElement.rotation || 0}
                             onChange={(e) => handleChange('rotation', Number(e.target.value))}
-                            className="flex-1 accent-blue-600"
+                            className="flex-1 accent-emerald-600"
                         />
                         <input
                             type="number"
@@ -405,17 +531,17 @@ export const PropertiesPanel: React.FC = () => {
                         id="aspectRatioLock"
                         checked={effectiveElement.aspectRatioLocked}
                         onChange={(e) => handleChange('aspectRatioLocked', e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                     />
                     <label htmlFor="aspectRatioLock" className="text-sm font-medium text-black cursor-pointer">Lock Aspect Ratio</label>
                 </div>
             </div>
+            </InspectorSection>
 
             {/* Type Specific Properties */}
             {(selectedElement.type === 'text' || selectedElement.type === 'button') && (
-                <div className="space-y-5 border-t border-gray-200 pt-5">
-                    <h4 className="font-bold text-sm text-black uppercase tracking-wide">Text Properties</h4>
-
+                <InspectorSection title="Copy Settings" className="border-t border-gray-200 pt-5">
+                    <div className="space-y-4">
                     <div>
                         <label className="block text-xs font-bold text-black mb-1.5">Content</label>
                         <textarea
@@ -441,7 +567,7 @@ export const PropertiesPanel: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-bold text-black mb-1.5">Font Size (px)</label>
                             <input
@@ -450,13 +576,15 @@ export const PropertiesPanel: React.FC = () => {
                                     const baseSize = parseInt(effectiveElement.style?.fontSize as string || '32');
                                     const banner = bannerSizes.find(b => b.id === selectedBannerId);
                                     if (!banner) return baseSize;
-                                    return Math.round((baseSize / 1080) * banner.height);
+                                    const masterHeight = getCategoryMasterSize(bannerSizes, banner.category)?.height ?? banner.height;
+                                    return Math.round((baseSize / masterHeight) * banner.height);
                                 })()}
                                 onChange={(e) => {
                                     const newSize = Number(e.target.value);
                                     const banner = bannerSizes.find(b => b.id === selectedBannerId);
-                                    const height = banner ? banner.height : 1080;
-                                    const newBaseSize = Math.round((newSize / height) * 1080);
+                                    const height = banner ? banner.height : 1200;
+                                    const masterHeight = banner ? (getCategoryMasterSize(bannerSizes, banner.category)?.height ?? banner.height) : 1200;
+                                    const newBaseSize = Math.round((newSize / height) * masterHeight);
                                     handleStyleChange('fontSize', `${newBaseSize}px`);
                                 }}
                                 className="w-full p-2 border border-gray-300 rounded text-sm text-black"
@@ -481,7 +609,7 @@ export const PropertiesPanel: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                         <h5 className="text-xs font-bold text-gray-500 uppercase">Text Alignment</h5>
                         <div className="grid grid-cols-1 gap-3">
                             <div className="flex items-center gap-2">
@@ -517,14 +645,14 @@ export const PropertiesPanel: React.FC = () => {
                                     <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
                                         <button
                                             onClick={() => handleStyleChange('direction', 'ltr')}
-                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'ltr' || !effectiveElement.style?.direction ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'ltr' || !effectiveElement.style?.direction ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                             title="Left-to-Right"
                                         >
                                             LTR
                                         </button>
                                         <button
                                             onClick={() => handleStyleChange('direction', 'rtl')}
-                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'rtl' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            className={`flex-1 p-2 flex justify-center text-xs font-bold ${effectiveElement.style?.direction === 'rtl' ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                             title="Right-to-Left"
                                         >
                                             RTL
@@ -537,28 +665,28 @@ export const PropertiesPanel: React.FC = () => {
                                 <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
                                     <button
                                         onClick={() => handleStyleChange('fontWeight', effectiveElement.style?.fontWeight === 'bold' ? 'normal' : 'bold')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontWeight === 'bold' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontWeight === 'bold' ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                         title="Bold"
                                     >
                                         <Bold size={18} />
                                     </button>
                                     <button
                                         onClick={() => handleStyleChange('fontStyle', effectiveElement.style?.fontStyle === 'italic' ? 'normal' : 'italic')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontStyle === 'italic' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.fontStyle === 'italic' ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                         title="Italic"
                                     >
                                         <Italic size={18} />
                                     </button>
                                     <button
                                         onClick={() => handleStyleChange('textDecoration', effectiveElement.style?.textDecoration === 'underline' ? 'none' : 'underline')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'underline' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'underline' ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                         title="Underline"
                                     >
                                         <Underline size={18} />
                                     </button>
                                     <button
                                         onClick={() => handleStyleChange('textDecoration', effectiveElement.style?.textDecoration === 'line-through' ? 'none' : 'line-through')}
-                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'line-through' ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                        className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.textDecoration === 'line-through' ? 'bg-teal-100 text-teal-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                         title="Strikethrough"
                                     >
                                         <Strikethrough size={18} />
@@ -572,21 +700,21 @@ export const PropertiesPanel: React.FC = () => {
                                     <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
                                         <button
                                             onClick={() => handleStyleChange('verticalAlign', 'top')}
-                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'top' ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'top' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                             title="Align Top"
                                         >
                                             <AlignStartVertical size={18} />
                                         </button>
                                         <button
                                             onClick={() => handleStyleChange('verticalAlign', 'middle')}
-                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'middle' || !effectiveElement.style?.verticalAlign ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'middle' || !effectiveElement.style?.verticalAlign ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                             title="Align Middle"
                                         >
                                             <AlignCenterVertical size={18} />
                                         </button>
                                         <button
                                             onClick={() => handleStyleChange('verticalAlign', 'bottom')}
-                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'bottom' ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100 text-gray-700'}`}
+                                            className={`flex-1 p-2 flex justify-center ${effectiveElement.style?.verticalAlign === 'bottom' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-gray-100 text-gray-700'}`}
                                             title="Align Bottom"
                                         >
                                             <AlignEndVertical size={18} />
@@ -596,30 +724,30 @@ export const PropertiesPanel: React.FC = () => {
                             )}
                         </div>
                     </div>
-                </div>
+                    </div>
+                </InspectorSection>
             )}
 
             {(selectedElement.type === 'shape' || selectedElement.type === 'button') && (
-                <div className="space-y-5 border-t border-gray-200 pt-5">
-                    <h4 className="font-bold text-sm text-black uppercase tracking-wide">Shape Properties</h4>
+                <InspectorSection title="Shape Settings" className="border-t border-gray-200 pt-5">
                     <div>
                         <label className="block text-xs font-bold text-black mb-1.5">Background Color</label>
                         <div className="flex gap-2">
                             <input
                                 type="color"
-                                value={selectedElement.type === 'button' ? (effectiveElement.style?.backgroundColor as string || '#3b82f6') : effectiveElement.content}
+                                value={selectedElement.type === 'button' ? (effectiveElement.style?.backgroundColor as string || '#19C37D') : effectiveElement.content}
                                 onChange={(e) => selectedElement.type === 'button' ? handleStyleChange('backgroundColor', e.target.value) : handleChange('content', e.target.value)}
                                 className="h-10 w-10 p-1 border border-gray-300 rounded cursor-pointer"
                             />
                             <input
                                 type="text"
-                                value={selectedElement.type === 'button' ? (effectiveElement.style?.backgroundColor as string || '#3b82f6') : effectiveElement.content}
+                                value={selectedElement.type === 'button' ? (effectiveElement.style?.backgroundColor as string || '#19C37D') : effectiveElement.content}
                                 onChange={(e) => selectedElement.type === 'button' ? handleStyleChange('backgroundColor', e.target.value) : handleChange('content', e.target.value)}
                                 className="flex-1 p-2 border border-gray-300 rounded text-sm uppercase text-black"
                             />
                         </div>
                     </div>
-                </div>
+                </InspectorSection>
             )}
         </div>
     );

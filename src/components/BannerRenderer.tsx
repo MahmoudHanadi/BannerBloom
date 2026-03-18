@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { BannerElement, Override } from '../store/bannerStore';
 import { useBannerStore } from '../store/bannerStore';
 import { calculateElementLayout } from '../utils/layoutUtils';
+import { getCategoryMasterSize } from '../config/bannerPresets';
 
 interface BannerRendererProps {
   bannerId: string;
@@ -34,8 +35,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const setIsolatedBanner = useBannerStore((state) => state.setIsolatedBanner);
 
   const background = useBannerStore((state) => state.background);
-  const logo = useBannerStore((state) => state.logo);
-  const cta = useBannerStore((state) => state.cta);
+  const bannerSizes = useBannerStore((state) => state.bannerSizes);
 
   // Track clicks for triple-click detection
   const clickCountRef = useRef(0);
@@ -47,141 +47,14 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, initialX: 0, initialY: 0 });
   const [resizeStart, setResizeStart] = useState<{ x: number; y: number; w: number; h: number; handle: string; initialX?: number; initialY?: number; initialFontSize?: number }>({ x: 0, y: 0, w: 0, h: 0, handle: '' });
   const [rotateStart, setRotateStart] = useState({ angle: 0, startAngle: 0 });
-  const [logoAspectRatio, setLogoAspectRatio] = useState<number>(1);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load logo image to get actual aspect ratio
-  useEffect(() => {
-    if (logo?.image) {
-      const img = new Image();
-      img.onload = () => {
-        setLogoAspectRatio(img.naturalWidth / img.naturalHeight);
-      };
-      img.src = logo.image;
-    }
-  }, [logo?.image]);
-
   // Scale factor for display
-  const scale = customScale ?? Math.min(1, 400 / width);
+  const scale = customScale ?? Math.min(1, 360 / width, 520 / height);
   const displayWidth = width * scale;
   const displayHeight = height * scale;
-
-  // Calculate logo position and size
-  const getLogoLayout = () => {
-    if (!logo) return null;
-
-    // Calculate logo size (percentage of banner width)
-    const logoWidthPercent = logo.size;
-    const logoPixelWidth = (logoWidthPercent / 100) * displayWidth;
-
-    // Use actual aspect ratio from loaded image
-    const logoPixelHeight = logoPixelWidth / logoAspectRatio;
-
-    // Calculate padding scaled to display
-    const padding = logo.padding * scale;
-
-    // Calculate position based on logo.position
-    let left = 0;
-    let top = 0;
-
-    switch (logo.position) {
-      case 'top-left':
-        left = padding;
-        top = padding;
-        break;
-      case 'top-center':
-        left = (displayWidth - logoPixelWidth) / 2;
-        top = padding;
-        break;
-      case 'top-right':
-        left = displayWidth - logoPixelWidth - padding;
-        top = padding;
-        break;
-      case 'center':
-        left = (displayWidth - logoPixelWidth) / 2;
-        top = (displayHeight - logoPixelHeight) / 2;
-        break;
-      case 'bottom-left':
-        left = padding;
-        top = displayHeight - logoPixelHeight - padding;
-        break;
-      case 'bottom-center':
-        left = (displayWidth - logoPixelWidth) / 2;
-        top = displayHeight - logoPixelHeight - padding;
-        break;
-      case 'bottom-right':
-        left = displayWidth - logoPixelWidth - padding;
-        top = displayHeight - logoPixelHeight - padding;
-        break;
-    }
-
-    return {
-      left,
-      top,
-      width: logoPixelWidth,
-      height: logoPixelHeight,
-    };
-  };
-
-  const logoLayout = getLogoLayout();
-
-  // Calculate CTA position and size
-  const getCTALayout = () => {
-    if (!cta) return null;
-
-    // Calculate CTA size
-    const ctaWidthPercent = cta.width;
-    const ctaPixelWidth = (ctaWidthPercent / 100) * displayWidth;
-    const ctaPixelHeight = cta.height * scale;
-
-    // Calculate padding scaled to display
-    const padding = cta.padding * scale;
-
-    // Calculate position based on cta.position
-    let left = 0;
-    let top = 0;
-
-    switch (cta.position) {
-      case 'top-left':
-        left = padding;
-        top = padding;
-        break;
-      case 'top-center':
-        left = (displayWidth - ctaPixelWidth) / 2;
-        top = padding;
-        break;
-      case 'top-right':
-        left = displayWidth - ctaPixelWidth - padding;
-        top = padding;
-        break;
-      case 'center':
-        left = (displayWidth - ctaPixelWidth) / 2;
-        top = (displayHeight - ctaPixelHeight) / 2;
-        break;
-      case 'bottom-left':
-        left = padding;
-        top = displayHeight - ctaPixelHeight - padding;
-        break;
-      case 'bottom-center':
-        left = (displayWidth - ctaPixelWidth) / 2;
-        top = displayHeight - ctaPixelHeight - padding;
-        break;
-      case 'bottom-right':
-        left = displayWidth - ctaPixelWidth - padding;
-        top = displayHeight - ctaPixelHeight - padding;
-        break;
-    }
-
-    return {
-      left,
-      top,
-      width: ctaPixelWidth,
-      height: ctaPixelHeight,
-    };
-  };
-
-  const ctaLayout = getCTALayout();
+  const masterHeight = getCategoryMasterSize(bannerSizes, category)?.height ?? height;
 
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
     e.preventDefault();
@@ -192,7 +65,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
 
     const el = elements.find(e => e.id === elementId);
     if (el) {
-      const layout = calculateElementLayout(el, overrides, width, height, category, scale);
+      const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
       setDragStart({ x: e.clientX, y: e.clientY, initialX: layout.x, initialY: layout.y });
     } else {
       setDragStart({ x: e.clientX, y: e.clientY, initialX: 0, initialY: 0 });
@@ -208,7 +81,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
 
     // Use the calculated layout to get the ACTUAL visual size (which might be clamped)
     // This prevents jumping when resizing a clamped element
-    const layout = calculateElementLayout(el, overrides, width, height, category, scale);
+    const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
 
     // Convert visual pixels back to percentages for the resize operation base
     const visualWPercent = (layout.pixelW / displayWidth) * 100;
@@ -242,7 +115,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     if (!el) return;
 
     // Calculate center of element in screen coordinates
-    const layout = calculateElementLayout(el, overrides, width, height, category, scale);
+    const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -261,7 +134,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       // const props = getElementProps(element); // This is no longer needed as layout provides merged props
 
       // We need to get the current effective properties for the element, considering overrides
-      const currentLayout = calculateElementLayout(element, overrides, width, height, category, scale);
+      const currentLayout = calculateElementLayout(element, overrides, width, height, category, scale, masterHeight);
 
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
@@ -423,7 +296,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        const layout = calculateElementLayout(element, overrides, width, height, category, scale);
+        const layout = calculateElementLayout(element, overrides, width, height, category, scale, masterHeight);
         const centerX = rect.left + layout.pixelX + layout.pixelW / 2;
         const centerY = rect.top + layout.pixelY + layout.pixelH / 2;
 
@@ -449,7 +322,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isResizing, isRotating, dragStart, resizeStart, rotateStart, selectedElementId, bannerId, displayWidth, displayHeight, elements, overrides, setOverride, width, height, category, scale]);
+  }, [isDragging, isResizing, isRotating, dragStart, resizeStart, rotateStart, selectedElementId, bannerId, displayWidth, displayHeight, elements, overrides, setOverride, width, height, category, scale, masterHeight]);
 
 
 
@@ -518,7 +391,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       style={{
         width: displayWidth,
         height: displayHeight,
-        border: isExport ? 'none' : isIsolated ? '4px solid #f59e0b' : isMaster ? '3px solid #3b82f6' : isSelected ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+        border: isExport ? 'none' : isIsolated ? '3px solid #19C37D' : isMaster ? '2px solid #19C37D' : isSelected ? '2px solid #0EA5A4' : '1px solid rgba(148, 163, 184, 0.32)',
         backgroundColor: (background.type === 'solid' ? background.value : undefined) || '#ffffff',
         backgroundImage: background.type === 'gradient'
           ? `linear-gradient(${background.gradientDirection || '90deg'}, ${background.gradientColors?.[0] || '#ffffff'}, ${background.gradientColors?.[1] || '#000000'})`
@@ -527,19 +400,20 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         backgroundPosition: 'center',
         overflow: isSelected && !isExport ? 'visible' : 'hidden',
         zIndex: isSelected ? 50 : 1,
+        borderRadius: isExport ? 0 : 20,
       }}
-      className={`bg-white relative select-none ${!isExport ? 'shadow-sm' : ''} ${isIsolated && !isExport ? 'ring-4 ring-amber-500' : isSelected && !isExport ? 'ring-4 ring-blue-100' : ''}`}
+      className={`relative select-none bg-white ${!isExport ? 'shadow-[0_14px_30px_rgba(15,23,42,0.12)]' : ''} ${isIsolated && !isExport ? 'ring-4 ring-emerald-200' : isSelected && !isExport ? 'ring-4 ring-teal-100' : ''}`}
       onClick={handleBannerClick}
     >
       {/* Isolated Mode Indicator */}
       {isIsolated && !isExport && (
-        <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-bl-md z-[9999] shadow-md">
-          ISOLATED MODE
+        <div className="absolute right-0 top-0 z-[9999] rounded-bl-xl bg-emerald-500 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white shadow-md">
+          PLACEMENT FOCUS
         </div>
       )}
 
       {elements.map((el, index) => {
-        const layout = calculateElementLayout(el, overrides, width, height, category, scale);
+        const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
         const isElSelected = el.id === selectedElementId && !isExport;
         // Fix Layer Order: Use array index for z-index when not selected, so DOM order (layer order) is respected.
         // Selected element gets promoted to 1000 to be on top of handles, but efficient lookups needed?
@@ -566,7 +440,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                   ...getShapeStyle(el.shapeType)
                 } : {}),
                 ...(el.type === 'button' ? {
-                  backgroundColor: layout.mergedStyle.backgroundColor || '#3b82f6',
+                  backgroundColor: layout.mergedStyle.backgroundColor || '#19C37D',
                   borderRadius: layout.mergedStyle.borderRadius || '8px',
                   display: 'flex',
                   alignItems: 'center',
@@ -575,25 +449,25 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                 cursor: isDragging ? 'grabbing' : 'move',
                 boxSizing: 'border-box',
                 zIndex: zIndex,
-                border: isElSelected && el.type === 'text' ? '1px solid #3b82f6' : '1px dashed transparent',
+                border: isElSelected && el.type === 'text' ? '1px solid #19C37D' : '1px dashed transparent',
               }}
-              className={isElSelected && el.type === 'text' ? 'group pointer-events-auto ring-4 ring-blue-100' : ''}
+              className={isElSelected && el.type === 'text' ? 'group pointer-events-auto ring-4 ring-emerald-100' : ''}
             >
               {/* Render Handles for Text if selected */}
               {isElSelected && el.type === 'text' && (
                 <>
-                  <div className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-blue-500 cursor-nw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'nw', el.id)} />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-blue-500 cursor-ne-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'ne', el.id)} />
-                  <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-blue-500 cursor-sw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'sw', el.id)} />
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-blue-500 cursor-se-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'se', el.id)} />
+                  <div className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-emerald-500 cursor-nw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'nw', el.id)} />
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-emerald-500 cursor-ne-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'ne', el.id)} />
+                  <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-emerald-500 cursor-sw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'sw', el.id)} />
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-emerald-500 cursor-se-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'se', el.id)} />
 
                   {/* Rotation Handle */}
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-blue-500 pointer-events-auto"></div>
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-emerald-500 pointer-events-auto"></div>
                   <div
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border border-blue-500 rounded-full cursor-grab flex items-center justify-center pointer-events-auto"
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border border-emerald-500 rounded-full cursor-grab flex items-center justify-center pointer-events-auto"
                     onMouseDown={(e) => handleRotateStart(e, el.id)}
                   >
-                    <span className="text-[8px]">↻</span>
+                    <span className="text-[8px] font-bold">R</span>
                   </div>
                 </>
               )}
@@ -650,7 +524,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                   width: layout.pixelW,
                   height: layout.pixelH,
                   transform: `rotate(${layout.rotation}deg)`,
-                  border: '1px solid #3b82f6',
+                  border: '1px solid #19C37D',
                   cursor: isDragging ? 'grabbing' : 'move',
                   boxSizing: 'border-box',
                   zIndex: 60, // Above content
@@ -659,18 +533,18 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                 className="group pointer-events-auto"
               >
                 {/* Resize Handles */}
-                <div className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-blue-500 cursor-nw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'nw', el.id)} />
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-blue-500 cursor-ne-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'ne', el.id)} />
-                <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-blue-500 cursor-sw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'sw', el.id)} />
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-blue-500 cursor-se-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'se', el.id)} />
+                <div className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-emerald-500 cursor-nw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'nw', el.id)} />
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-emerald-500 cursor-ne-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'ne', el.id)} />
+                <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-emerald-500 cursor-sw-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'sw', el.id)} />
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-emerald-500 cursor-se-resize pointer-events-auto" onMouseDown={(e) => handleResizeStart(e, 'se', el.id)} />
 
                 {/* Rotation Handle */}
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-blue-500 pointer-events-auto"></div>
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-emerald-500 pointer-events-auto"></div>
                 <div
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border border-blue-500 rounded-full cursor-grab flex items-center justify-center pointer-events-auto"
+                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border border-emerald-500 rounded-full cursor-grab flex items-center justify-center pointer-events-auto"
                   onMouseDown={(e) => handleRotateStart(e, el.id)}
                 >
-                  <span className="text-[8px]">↻</span>
+                  <span className="text-[8px] font-bold">R</span>
                 </div>
               </div>
             )}
@@ -678,83 +552,6 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         );
       })}
 
-      {/* Global Logo - Renders on top of all elements */}
-      {logoLayout && logo && (
-        <div
-          style={{
-            position: 'absolute',
-            left: logoLayout.left,
-            top: logoLayout.top,
-            width: logoLayout.width,
-            height: logoLayout.height,
-            zIndex: 10000, // Always on top
-            pointerEvents: 'none', // Don't interfere with element selection
-          }}
-        >
-          <img
-            src={logo.image}
-            alt="Logo"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-            }}
-          />
-        </div>
-      )}
-
-      {/* Global CTA - Renders on top of all elements */}
-      {ctaLayout && cta && (() => {
-        // Determine background based on animation type
-        let background = cta.backgroundColor;
-        let backgroundSize = 'auto';
-
-        if (cta.animation === 'colorwave' && cta.colorWaveColors) {
-          // For color wave, use a special gradient that animates
-          background = `linear-gradient(90deg, ${cta.colorWaveColors[0]}, ${cta.colorWaveColors[1]}, ${cta.colorWaveColors[0]})`;
-          backgroundSize = '200% 100%';
-        } else if (cta.backgroundType === 'gradient' && cta.gradientColors) {
-          background = `linear-gradient(${cta.gradientDirection}, ${cta.gradientColors[0]}, ${cta.gradientColors[1]})`;
-        }
-
-        // Determine animation
-        let animation = 'none';
-        if (cta.animation === 'heartbeat') {
-          animation = `cta-heartbeat ${cta.animationSpeed}s ease-in-out infinite`;
-        } else if (cta.animation === 'shake') {
-          animation = `cta-shake ${cta.animationSpeed}s ease-in-out infinite`;
-        } else if (cta.animation === 'colorwave') {
-          animation = `cta-colorwave ${cta.animationSpeed}s linear infinite`;
-        }
-
-        return (
-          <div
-            style={{
-              position: 'absolute',
-              left: ctaLayout.left,
-              top: ctaLayout.top,
-              width: ctaLayout.width,
-              height: ctaLayout.height,
-              zIndex: 10001, // On top of logo
-              pointerEvents: 'none', // Don't interfere with element selection
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background,
-              backgroundSize,
-              color: cta.textColor,
-              borderRadius: `${cta.borderRadius * scale}px`,
-              fontWeight: cta.fontWeight,
-              fontSize: `${(cta.fontSize / 100) * ctaLayout.height}px`,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              animation,
-            }}
-          >
-            {cta.text}
-          </div>
-        );
-      })()}
     </div>
   );
 };

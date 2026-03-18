@@ -1,147 +1,282 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { getBannerPreset, bannerPresets } from '../config/bannerPresets';
 import { useBannerStore } from '../store/bannerStore';
 import { LayersPanel } from './LayersPanel';
-import { LogoPanel } from './LogoPanel';
-import { CTAPanel } from './CTAPanel';
-import { LayoutGrid, Home } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  FolderUp,
+  Home,
+  ImagePlus,
+  LayoutGrid,
+  MousePointer,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Shapes,
+  Square,
+  Target,
+  Type,
+} from 'lucide-react';
+import type { BannerPresetId } from '../types/banner';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const addElement = useBannerStore((state) => state.addElement);
   const loadProject = useBannerStore((state) => state.loadProject);
+  const addImageElementFromBlob = useBannerStore((state) => state.addImageElementFromBlob);
+  const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
+  const bannerSizes = useBannerStore((state) => state.bannerSizes);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
+  const setBannerPreset = useBannerStore((state) => state.setBannerPreset);
   const getAllProjects = useBannerStore((state) => state.getAllProjects);
+  const showGallery = useBannerStore((state) => state.showGallery);
+  const elementsCount = useBannerStore((state) => state.elements.length);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
-  const showGallery = useBannerStore((state) => state.showGallery);
-  const [selectedShapeType, setSelectedShapeType] = useState<'rectangle' | 'circle' | 'rounded-rectangle' | 'button'>('rectangle');
+
   const [projectsCount, setProjectsCount] = useState(0);
+  const [openSections, setOpenSections] = useState({
+    target: true,
+    workspace: true,
+    elements: true,
+    layers: true,
+  });
+  const currentPreset = getBannerPreset(bannerPresetId);
 
   useEffect(() => {
-    getAllProjects().then(projects => setProjectsCount(projects.length));
+    getAllProjects().then((projects) => setProjectsCount(projects.length));
   }, [getAllProjects, showGallery]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          const img = new Image();
-          img.onload = () => {
-            addElement('image', e.target?.result as string, undefined, {
-              width: img.naturalWidth,
-              height: img.naturalHeight
-            });
-          };
-          img.src = e.target.result as string;
-        }
-      };
-      reader.readAsDataURL(file);
+      void addImageElementFromBlob(file, file.name);
     }
-    // Reset input so same file can be selected again
-    if (event.target) {
-      event.target.value = '';
-    }
+
+    event.target.value = '';
   };
 
-  const handleAddShape = () => {
-    if (selectedShapeType === 'button') {
-      addElement('button', 'Click Me');
-    } else {
-      addElement('shape', '#3b82f6', selectedShapeType);
-    }
+  const handleAddShape = (shapeType: 'rectangle' | 'circle' | 'rounded-rectangle') => {
+    addElement('shape', '#19C37D', shapeType);
   };
 
   const handleProjectLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          loadProject(e.target.result as string);
+      reader.onload = (loadEvent) => {
+        if (loadEvent.target?.result) {
+          void loadProject(loadEvent.target.result as string);
         }
       };
       reader.readAsText(file);
     }
-    if (event.target) event.target.value = '';
+
+    event.target.value = '';
   };
 
+  const toggleSection = (section: 'target' | 'workspace' | 'elements' | 'layers') => {
+    setOpenSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  };
+
+  if (isCollapsed) {
+    return (
+      <div className="studio-sidebar studio-sidebar-collapsed flex h-full min-h-0 flex-col items-center justify-start gap-4 overflow-hidden rounded-[1.35rem] border px-2 py-3">
+        <button
+          onClick={onToggleCollapse}
+          className="studio-panel-toggle"
+          title="Expand left menu"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+        <div className="studio-collapsed-rail-label">Create</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-sm relative">
-      <div className="p-4 flex flex-col h-full overflow-y-auto custom-scrollbar">
-        {/* Dashboard/Home Button - Fixed at Top */}
-        <div className="flex-shrink-0 mb-4">
+    <div className="studio-sidebar flex h-full min-h-0 flex-col overflow-hidden rounded-[1.35rem] border">
+      <div className="studio-sidebar-header flex items-center justify-between border-b border-slate-200/70 px-3 pb-3 pt-3">
+        <div>
+          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Creative system
+          </div>
+          <div className="mt-1 text-sm font-semibold text-slate-800">Build campaign</div>
+        </div>
+        <button
+          onClick={onToggleCollapse}
+          className="studio-panel-toggle"
+          title="Collapse left menu"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="studio-sidebar-scroll flex h-full flex-col overflow-y-auto px-3 py-3 pr-2">
+        <div className="studio-section-card studio-sidebar-card studio-sidebar-hero rounded-[1.15rem]">
           <button
-            onClick={() => setShowGallery(true)}
-            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2 relative group"
-            title="Open Projects Dashboard (⌘+H or Ctrl+H)"
+            type="button"
+            onClick={() => toggleSection('target')}
+            className="studio-sidebar-section-toggle"
+            aria-expanded={openSections.target}
           >
-            <Home className="w-5 h-5" />
-            <span>Projects Dashboard</span>
-            <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              ⌘H
+              {openSections.target ? (
+                <div>
+                  <div className="studio-section-label !mb-1">Targets</div>
+                  <h2 className="text-lg font-bold text-slate-900">Deployment targets</h2>
+                </div>
+              ) : (
+                <div className="studio-sidebar-section-summary">
+                  <span className="studio-sidebar-section-kicker">Targets</span>
+                  <span className="studio-sidebar-section-title">Deployment targets</span>
+                </div>
+              )}
+            <span className="studio-sidebar-section-toggle-meta">
+              <span className="studio-pill studio-pill-primary">
+                <LayoutGrid className="h-3.5 w-3.5" />
+                {bannerSizes.length} sizes
+              </span>
+              {openSections.target ? (
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              )}
             </span>
           </button>
-          {projectsCount > 0 && (
-            <div className="mt-2 text-center">
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">
-                <LayoutGrid className="w-3 h-3" />
-                {projectsCount} project{projectsCount !== 1 ? 's' : ''}
-              </span>
-            </div>
+
+          {openSections.target && (
+            <>
+              <p className="mt-3 text-sm text-slate-500">
+                Choose the placements you need before you start composing or exporting outputs.
+              </p>
+
+              <div className="mt-3 studio-sidebar-metrics">
+                <span className="studio-pill studio-pill-neutral">{projectsCount} campaigns</span>
+                <span className="studio-pill studio-pill-neutral">
+                  {currentPreset.supportedExportTypes.join(' / ').toUpperCase()}
+                </span>
+              </div>
+
+              <label htmlFor="banner-target-select" className="studio-field-label">
+                Preset selection
+              </label>
+              <div className="studio-target-picker">
+                <span className="studio-target-icon">
+                  <Target className="h-4 w-4" />
+                </span>
+                <select
+                  id="banner-target-select"
+                  value={bannerPresetId}
+                  onChange={(event) => setBannerPreset(event.target.value as BannerPresetId)}
+                  className="studio-select px-3 py-2.5 text-sm font-medium"
+                >
+                  {Object.values(bannerPresets).map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="studio-target-description">{currentPreset.description}</p>
+            </>
           )}
         </div>
 
-        {/* Import Section - Fixed */}
-        <div className="flex-shrink-0 mb-4">
-          <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-3">Import</h3>
-          <input
-            type="file"
-            ref={projectInputRef}
-            onChange={handleProjectLoad}
-            accept=".bsp,.json"
-            className="hidden"
-          />
+        <div className="studio-section-card studio-sidebar-card rounded-[1.15rem]">
           <button
-            onClick={() => projectInputRef.current?.click()}
-            className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md text-xs font-bold transition-colors shadow-sm"
+            type="button"
+            onClick={() => toggleSection('workspace')}
+            className="studio-sidebar-section-toggle"
+            aria-expanded={openSections.workspace}
           >
-            📁 Import Project File
+            {openSections.workspace ? (
+              <div>
+                <div className="studio-section-label !mb-1">Campaigns</div>
+                <h3 className="text-base font-bold text-slate-900">Campaign files</h3>
+              </div>
+            ) : (
+              <div className="studio-sidebar-section-summary">
+                <span className="studio-sidebar-section-kicker">Campaigns</span>
+                <span className="studio-sidebar-section-title">Campaign files</span>
+              </div>
+            )}
+            {openSections.workspace ? (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            )}
           </button>
-          <p className="text-[10px] text-gray-500 mt-1 text-center">Load .bsp file</p>
+
+          {openSections.workspace && (
+            <>
+              <button
+                onClick={() => setShowGallery(true)}
+                className="mt-3 studio-button-primary flex w-full items-center justify-center gap-2 px-4 py-2.5"
+                title="Open campaign library (Ctrl+H)"
+              >
+                <Home className="h-4 w-4" />
+                Campaign library
+              </button>
+              <input
+                type="file"
+                ref={projectInputRef}
+                onChange={handleProjectLoad}
+                accept=".bsp,.json"
+                className="hidden"
+              />
+              <button
+                onClick={() => projectInputRef.current?.click()}
+                className="studio-button-ghost mt-2 flex w-full items-center justify-center gap-2 px-4 py-2.5"
+              >
+                <FolderUp className="h-4 w-4" />
+                Import campaign file
+              </button>
+              <p className="mt-3 text-sm text-slate-500">
+                Open saved campaigns or load a `.bsp` / `.json` file directly into the current workspace.
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Elements Section - Fixed */}
-        <div className="flex-shrink-0 border-t border-gray-200 pt-4 mb-4">
-          <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-3">Elements</h3>
-          <div className="space-y-3">
-            <button
-              onClick={() => addElement('text', 'New Text')}
-              className="w-full text-left px-4 py-3 bg-white border border-gray-300 hover:bg-gray-50 rounded-md text-black font-medium transition-colors shadow-sm"
-            >
-              Add Text
-            </button>
+        <div className="studio-section-card studio-sidebar-card rounded-[1.15rem]">
+          <button
+            type="button"
+            onClick={() => toggleSection('elements')}
+            className="studio-sidebar-section-toggle"
+            aria-expanded={openSections.elements}
+          >
+              {openSections.elements ? (
+                <div>
+                  <div className="studio-section-label !mb-1">Elements</div>
+                  <h3 className="text-base font-bold text-slate-900">Add elements</h3>
+                </div>
+              ) : (
+                <div className="studio-sidebar-section-summary">
+                  <span className="studio-sidebar-section-kicker">Elements</span>
+                  <span className="studio-sidebar-section-title">Add elements</span>
+                </div>
+              )}
+              <span className="studio-sidebar-section-toggle-meta">
+                {openSections.elements && <span className="studio-pill studio-pill-neutral">Paste copy or images</span>}
+                {openSections.elements ? (
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                ) : (
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              )}
+            </span>
+          </button>
 
-            <div className="flex gap-2">
-              <select
-                value={selectedShapeType}
-                onChange={(e) => setSelectedShapeType(e.target.value as typeof selectedShapeType)}
-                className="flex-1 p-2 bg-white border border-gray-300 rounded-md text-sm text-black font-medium shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-              >
-                <option value="rectangle">Rectangle</option>
-                <option value="circle">Circle</option>
-                <option value="rounded-rectangle">Rounded Rect</option>
-                <option value="button">Button</option>
-              </select>
-              <button
-                onClick={handleAddShape}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm"
-              >
-                Add
-              </button>
-            </div>
-
-            <div className="relative">
+          {openSections.elements && (
+            <>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -149,25 +284,121 @@ export const Sidebar: React.FC = () => {
                 accept="image/*"
                 className="hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full text-left px-4 py-3 bg-white border border-gray-300 hover:bg-gray-50 rounded-md text-black font-medium transition-colors shadow-sm"
-              >
-                Upload Image
-              </button>
-            </div>
-          </div>
+              <div className="mt-3 studio-tool-grid">
+                <button
+                  onClick={() => addElement('text', 'Headline')}
+                  className="studio-tool-button studio-tool-button-wide"
+                >
+                  <span className="studio-tool-icon bg-emerald-50 text-emerald-700">
+                    <Type className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">Add text</span>
+                    <span className="studio-tool-subtitle">Headlines, labels, or product copy.</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="studio-tool-button studio-tool-button-wide"
+                >
+                  <span className="studio-tool-icon bg-emerald-50 text-emerald-700">
+                    <ImagePlus className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">Upload image</span>
+                    <span className="studio-tool-subtitle">Place logos, products, or photography.</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleAddShape('rectangle')}
+                  className="studio-tool-button"
+                >
+                  <span className="studio-tool-icon bg-slate-100 text-slate-700">
+                    <Square className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">Rectangle</span>
+                    <span className="studio-tool-subtitle">Hard-edged block.</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleAddShape('circle')}
+                  className="studio-tool-button"
+                >
+                  <span className="studio-tool-icon bg-teal-50 text-teal-700">
+                    <Circle className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">Circle</span>
+                    <span className="studio-tool-subtitle">Badges and highlights.</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleAddShape('rounded-rectangle')}
+                  className="studio-tool-button"
+                >
+                  <span className="studio-tool-icon bg-amber-50 text-amber-700">
+                    <Shapes className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">Rounded card</span>
+                    <span className="studio-tool-subtitle">Soft-corner panel.</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => addElement('button', 'Call to action')}
+                  className="studio-tool-button"
+                >
+                  <span className="studio-tool-icon bg-emerald-100 text-emerald-800">
+                    <MousePointer className="h-4 w-4" />
+                  </span>
+                  <span className="studio-tool-copy">
+                    <span className="studio-tool-title">CTA</span>
+                    <span className="studio-tool-subtitle">Clickable call-to-action.</span>
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Logo Section - Fixed */}
-        <LogoPanel />
+        <div
+          className={`studio-section-card studio-sidebar-card rounded-[1.15rem] ${
+            openSections.layers ? 'studio-layers-card flex min-h-[180px] flex-1 flex-col' : ''
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => toggleSection('layers')}
+            className="studio-sidebar-section-toggle"
+            aria-expanded={openSections.layers}
+          >
+              {openSections.layers ? (
+                <div>
+                  <div className="studio-section-label !mb-1">Layers</div>
+                  <h3 className="text-base font-bold text-slate-900">Layer stack</h3>
+                </div>
+              ) : (
+                <div className="studio-sidebar-section-summary">
+                  <span className="studio-sidebar-section-kicker">Layers</span>
+                  <span className="studio-sidebar-section-title">Layer stack</span>
+                </div>
+              )}
+            <span className="studio-sidebar-section-toggle-meta">
+              <span className="studio-pill studio-pill-neutral">{elementsCount}</span>
+              {openSections.layers ? (
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              )}
+            </span>
+          </button>
 
-        {/* CTA Section - Fixed */}
-        <CTAPanel />
-
-        {/* Layers Section - Flexible, takes remaining space */}
-        <div className="flex-1 border-t border-gray-200 pt-4 min-h-[200px] flex flex-col shrink-0">
-          <LayersPanel />
+          {openSections.layers && (
+            <div className="mt-3 min-h-0 flex-1">
+              <LayersPanel showHeader={false} />
+            </div>
+          )}
         </div>
       </div>
     </div>

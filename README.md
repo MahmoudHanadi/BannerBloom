@@ -1,33 +1,35 @@
-# Banner Spore 🌱
+# BannerBloom
 
-A multi-format banner design tool that lets you design on master canvases and automatically generates various standard web banner sizes.
+Create once. Deploy everywhere.
 
-## Features
+BannerBloom is a multi-format creative deployment tool that lets you build on source canvases and generate campaign-ready banner outputs for standard placements.
 
-- **Master Canvas System** — Design on category-based master canvases (Square, Horizontal, Vertical) that auto-propagate to sub-sizes
-- **Override System** — Fine-tune individual banner sizes with per-banner overrides
-- **Element Types** — Text, Images, Shapes (Rectangle, Circle, Rounded Rect), and Buttons
-- **Smart Positioning** — Percentage-based layout for consistent scaling across banner sizes
-- **Aspect Ratio Locking** — Maintain proportions across different banner dimensions
-- **Background Options** — Solid color, gradient, or image backgrounds
-- **Export Formats** — PNG, HTML5, and AMP HTML exports (single or batch ZIP)
-- **Interactive Editing** — Drag, resize, rotate elements. Arrow key nudging. Space+drag canvas panning
+## Features 
+
+- **Source Canvas System** - Build on category-based source canvases (Square, Horizontal, Vertical) that auto-propagate to output sizes
+- **Override System** - Fine-tune individual banner sizes with per-placement overrides
+- **Element Types** - Text, images, shapes (rectangle, circle, rounded rect), and CTA buttons
+- **Smart Positioning** - Percentage-based layout for consistent scaling across banner sizes
+- **Aspect Ratio Locking** - Maintain proportions across different banner dimensions
+- **Background Options** - Solid color, gradient, or image backgrounds
+- **Export Formats** - PNG, HTML5, and AMP HTML exports (single or batch ZIP)
+- **Interactive Editing** - Drag, resize, rotate elements, nudge with arrow keys, and pan the canvas with Space+drag
 
 ## Tech Stack
 
-- **React 19** + **TypeScript**
-- **Vite** (dev server & bundler)
-- **Tailwind CSS 4** (styling)
-- **Zustand** (state management)
-- **html2canvas** (PNG export)
-- **JSZip** (batch export)
-- **Lucide React** (icons)
+- **React 19** +**TypeScript**
+- **Vite** for dev server and bundling
+- **Tailwind CSS 4** for styling
+- **Zustand** for state management
+- **html2canvas** for PNG export
+- **JSZip** for batch export
+- **Lucide React** for icons
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) v18+
 - npm
 
 ### Installation
@@ -42,7 +44,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open `http://localhost:5173` in your browser.
 
 ### Build
 
@@ -60,15 +62,15 @@ npm run lint
 
 | Category   | Size              | Dimensions |
 |------------|-------------------|------------|
-| Horizontal | Master Landscape  | 1200×628   |
-| Horizontal | Landscape Min     | 600×314    |
-| Square     | Master Square     | 1200×1200  |
-| Square     | Square Min        | 300×300    |
-| Vertical   | Master Vertical   | 960×1200   |
-| Vertical   | Vertical Min      | 480×600    |
-| Vertical   | Vertical 9:16     | 900×1600   |
-| Vertical   | AMP Portrait      | 320×480    |
-| Horizontal | AMP Landscape     | 480×320    |
+| Horizontal | Source Landscape  | 1200x628   |
+| Horizontal | Landscape Min     | 600x314    |
+| Square     | Source Square     | 1200x1200  |
+| Square     | Square Min        | 300x300    |
+| Vertical   | Source Vertical   | 960x1200   |
+| Vertical   | Vertical Min      | 480x600    |
+| Vertical   | Vertical 9:16     | 900x1600   |
+| Vertical   | AMP Portrait      | 320x480    |
+| Horizontal | AMP Landscape     | 480x320    |
 
 ## License
 

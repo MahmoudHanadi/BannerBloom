@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useBannerStore } from '../store/bannerStore';
-import { Save, Clock, Edit2, Check, Download, LayoutGrid } from 'lucide-react';
+import { Save, Clock, Edit2, Check, Download, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
 
-export const SaveBar: React.FC = () => {
+interface SaveBarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const projectName = useBannerStore((state) => state.projectName);
   const lastSaved = useBannerStore((state) => state.lastSaved);
   const setProjectName = useBannerStore((state) => state.setProjectName);
@@ -15,53 +20,50 @@ export const SaveBar: React.FC = () => {
   const [tempName, setTempName] = useState(projectName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
-  // Load from localStorage on mount - show gallery if multiple projects exist
   useEffect(() => {
     const checkInitialProjects = async () => {
       const projects = await useBannerStore.getState().getAllProjects();
 
       if (projects.length === 0) {
-        // No projects - stay in editor with default project
-      } else if (projects.length === 1) {
-        // Only one project - load it directly
-        loadFromLocalStorage();
-      } else {
-        // Multiple projects - show gallery (home page)
-        setShowGallery(true);
+        return;
       }
-    };
-    checkInitialProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
 
-  // Auto-save every 30 seconds
+      if (projects.length === 1) {
+        loadFromLocalStorage();
+        return;
+      }
+
+      setShowGallery(true);
+    };
+
+    checkInitialProjects();
+  }, [loadFromLocalStorage, setShowGallery]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       saveCurrentProject();
       setSaveStatus('saved');
-    }, 30000); // 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [saveCurrentProject]);
 
-  // Track changes for unsaved indicator
   const elements = useBannerStore((state) => state.elements);
+  const overrides = useBannerStore((state) => state.overrides);
   const background = useBannerStore((state) => state.background);
-  const logo = useBannerStore((state) => state.logo);
-  const cta = useBannerStore((state) => state.cta);
+  const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
 
   useEffect(() => {
     setSaveStatus('unsaved');
 
-    // Debounce auto-save on changes
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
       saveCurrentProject();
       setTimeout(() => setSaveStatus('saved'), 500);
-    }, 2000); // Wait 2 seconds after last change
+    }, 2000);
 
     return () => clearTimeout(timeout);
-  }, [elements, background, logo, cta, saveCurrentProject]);
+  }, [elements, overrides, background, bannerPresetId, saveCurrentProject]);
 
   const handleSaveClick = () => {
     setSaveStatus('saving');
@@ -70,11 +72,13 @@ export const SaveBar: React.FC = () => {
   };
 
   const handleNameSubmit = () => {
-    if (tempName.trim()) {
-      setProjectName(tempName.trim());
-      setIsEditingName(false);
-      saveCurrentProject();
+    if (!tempName.trim()) {
+      return;
     }
+
+    setProjectName(tempName.trim());
+    setIsEditingName(false);
+    saveCurrentProject();
   };
 
   const formatLastSaved = () => {
@@ -88,12 +92,43 @@ export const SaveBar: React.FC = () => {
     return new Date(lastSaved).toLocaleDateString();
   };
 
+  if (isCollapsed) {
+    return (
+      <div className="studio-topbar mx-3 mt-3 rounded-[1.25rem] border px-4 py-2.5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Campaign
+            </div>
+            <div className="truncate text-sm font-semibold text-slate-900">{projectName}</div>
+          </div>
+          <button
+            onClick={onToggleCollapse}
+            className="studio-panel-toggle"
+            title="Expand top bar"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white border-b border-gray-200 shadow-sm px-6 py-3 flex items-center justify-between">
-      {/* Project Name */}
-      <div className="flex items-center gap-3">
+    <div className="studio-topbar mx-3 mt-3 flex items-center justify-between gap-4 rounded-[1.35rem] border px-5 py-2.5">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/70 bg-white/75 px-3 py-2 shadow-sm">
+          <img src="/bannerbloom-mark.svg" alt="BannerBloom" className="h-10 w-10 rounded-xl" />
+          <div>
+            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              BannerBloom
+            </div>
+            <div className="text-sm font-semibold text-slate-900">Create once. Deploy everywhere.</div>
+          </div>
+        </div>
+
         {isEditingName ? (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <input
               type="text"
               value={tempName}
@@ -107,13 +142,10 @@ export const SaveBar: React.FC = () => {
                 }
               }}
               autoFocus
-              className="px-3 py-1 border border-blue-500 rounded-md text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="studio-input px-4 py-2 text-lg font-semibold"
             />
-            <button
-              onClick={handleNameSubmit}
-              className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              <Check className="w-4 h-4" />
+            <button onClick={handleNameSubmit} className="studio-button-primary p-2">
+              <Check className="h-4 w-4" />
             </button>
           </div>
         ) : (
@@ -122,63 +154,75 @@ export const SaveBar: React.FC = () => {
               setIsEditingName(true);
               setTempName(projectName);
             }}
-            className="flex items-center gap-2 px-3 py-1 hover:bg-gray-100 rounded-md transition-colors group"
+            className="group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-left transition-colors hover:border-slate-200 hover:bg-white/75"
           >
-            <h1 className="text-lg font-semibold text-gray-800">{projectName}</h1>
-            <Edit2 className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+            <div className="min-w-0">
+              <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Campaign
+              </div>
+              <h1 className="truncate text-xl font-bold text-slate-900">{projectName}</h1>
+            </div>
+            <Edit2 className="h-4 w-4 text-slate-400 group-hover:text-slate-600" />
           </button>
         )}
 
-        {/* Save Status */}
         <div className="flex items-center gap-2 text-sm">
           {saveStatus === 'saving' ? (
-            <div className="flex items-center gap-2 text-blue-600">
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+            <div className="studio-pill studio-pill-primary">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-600" />
               <span>Saving...</span>
             </div>
           ) : saveStatus === 'saved' ? (
-            <div className="flex items-center gap-2 text-green-600">
-              <Check className="w-4 h-4" />
+            <div className="studio-pill studio-pill-success">
+              <Check className="h-4 w-4" />
               <span>Saved</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-orange-600">
-              <Clock className="w-4 h-4" />
+            <div className="studio-pill studio-pill-warning">
+              <Clock className="h-4 w-4" />
               <span>Unsaved changes</span>
             </div>
           )}
-          <span className="text-gray-400">•</span>
-          <span className="text-gray-500">{formatLastSaved()}</span>
+          <span className="text-sm text-slate-500">Last saved {formatLastSaved()}</span>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-3">
+        <button
+          onClick={onToggleCollapse}
+          className="studio-panel-toggle"
+          title="Collapse top bar"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </button>
+
         <button
           onClick={() => setShowGallery(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-medium transition-colors shadow-sm relative group"
-          title="View all projects (⌘+H or Ctrl+H)"
+          className="studio-button-ghost group relative flex items-center gap-2 px-4 py-2.5"
+          title="Open campaign library (Ctrl+H)"
         >
-          <LayoutGrid className="w-4 h-4" />
-          My Projects
-          <span className="ml-1 text-xs opacity-70 group-hover:opacity-100">⌘H</span>
+          <LayoutGrid className="h-4 w-4" />
+          Library
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold text-slate-500 group-hover:bg-slate-200">
+            Ctrl+H
+          </span>
         </button>
 
         <button
           onClick={handleSaveClick}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors shadow-sm"
+          className="studio-button-primary flex items-center gap-2 px-4 py-2.5"
         >
-          <Save className="w-4 h-4" />
+          <Save className="h-4 w-4" />
           Save
         </button>
 
         <button
           onClick={saveProject}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-md font-medium transition-colors"
-          title="Export project file"
+          className="studio-button-ghost flex items-center gap-2 px-4 py-2.5"
+          title="Export campaign backup"
         >
-          <Download className="w-4 h-4" />
-          Export
+          <Download className="h-4 w-4" />
+          Export backup
         </button>
       </div>
     </div>

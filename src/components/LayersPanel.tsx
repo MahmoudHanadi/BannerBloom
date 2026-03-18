@@ -1,9 +1,23 @@
 import React from 'react';
 import { useBannerStore } from '../store/bannerStore';
-import { Type, Image, Square, MousePointer, Eye, EyeOff, Trash2, MoveUp, MoveDown, ChevronsUp, ChevronsDown } from 'lucide-react';
+import {
+  Type,
+  Image,
+  Square,
+  MousePointer,
+  Trash2,
+  MoveUp,
+  MoveDown,
+  ChevronsUp,
+  ChevronsDown,
+} from 'lucide-react';
 import type { BannerElement } from '../store/bannerStore';
 
-export const LayersPanel: React.FC = () => {
+interface LayersPanelProps {
+  showHeader?: boolean;
+}
+
+export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) => {
   const elements = useBannerStore((state) => state.elements);
   const selectedElementId = useBannerStore((state) => state.selectedElementId);
   const selectElement = useBannerStore((state) => state.selectElement);
@@ -13,56 +27,106 @@ export const LayersPanel: React.FC = () => {
   const getElementIcon = (type: BannerElement['type']) => {
     switch (type) {
       case 'text':
-        return <Type className="w-4 h-4" />;
+        return <Type className="h-4 w-4" />;
       case 'image':
-        return <Image className="w-4 h-4" />;
+        return <Image className="h-4 w-4" />;
       case 'shape':
-        return <Square className="w-4 h-4" />;
+        return <Square className="h-4 w-4" />;
       case 'button':
-        return <MousePointer className="w-4 h-4" />;
+        return <MousePointer className="h-4 w-4" />;
       default:
-        return <Square className="w-4 h-4" />;
+        return <Square className="h-4 w-4" />;
     }
   };
 
   const getElementLabel = (element: BannerElement) => {
     const typeLabel = element.type.charAt(0).toUpperCase() + element.type.slice(1);
-    
+
     if (element.type === 'text') {
-      const preview = element.content.length > 20 
-        ? element.content.substring(0, 20) + '...' 
-        : element.content;
+      const preview = element.content.length > 20 ? `${element.content.substring(0, 20)}...` : element.content;
       return `${typeLabel}: "${preview}"`;
-    } else if (element.type === 'shape') {
-      return `${typeLabel} (${element.shapeType})`;
-    } else if (element.type === 'button') {
-      return `${typeLabel}: "${element.content}"`;
-    } else {
-      return typeLabel;
     }
+
+    if (element.type === 'shape') {
+      return `${typeLabel} (${element.shapeType})`;
+    }
+
+    if (element.type === 'button') {
+      return `${typeLabel}: "${element.content}"`;
+    }
+
+    return typeLabel;
   };
 
-  // Elements are rendered from index 0 (bottom) to end (top)
-  // So we reverse the array for display so top items appear first in the list
+  const getElementDisplay = (element: BannerElement) => {
+    if (element.type === 'text') {
+      const preview = element.content.trim();
+
+      return {
+        title: 'Text',
+        subtitle: preview.length > 48 ? `${preview.substring(0, 45)}...` : preview || 'Headline or supporting copy.',
+      };
+    }
+
+    if (element.type === 'image') {
+      return {
+        title: 'Image',
+        subtitle: 'Uploaded asset.',
+      };
+    }
+
+    if (element.type === 'shape') {
+      const shapeLabels: Record<NonNullable<BannerElement['shapeType']>, string> = {
+        rectangle: 'Rectangle',
+        circle: 'Circle',
+        'rounded-rectangle': 'Rounded card',
+      };
+
+      return {
+        title: shapeLabels[element.shapeType ?? 'rectangle'],
+        subtitle: 'Shape layer.',
+      };
+    }
+
+    if (element.type === 'button') {
+      const preview = element.content.trim();
+
+      return {
+        title: 'CTA button',
+        subtitle: preview.length > 40 ? `${preview.substring(0, 37)}...` : preview || 'Call to action.',
+      };
+    }
+
+    return {
+      title: 'Layer',
+      subtitle: '',
+    };
+  };
+
   const displayElements = [...elements].reverse();
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <h3 className="text-sm font-bold text-black uppercase tracking-wide">
-          Layers
-        </h3>
-        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-          {elements.length}
-        </span>
-      </div>
-      
-      <div className="space-y-1 overflow-y-auto flex-1 pr-1 -mr-1 min-h-0 scrollbar-thin">
+    <div className="studio-layers-panel flex h-full min-h-0 flex-col">
+      {showHeader && (
+        <div className="mb-4 flex flex-shrink-0 items-center justify-between">
+          <div>
+            <div className="studio-section-label !mb-1">Layers</div>
+            <h3 className="text-base font-bold text-slate-900">Layer stack</h3>
+          </div>
+          <span className="studio-pill studio-pill-neutral">{elements.length}</span>
+        </div>
+      )}
+
+      <div className="flex-1 space-y-2 overflow-y-auto pr-1">
         {displayElements.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            <div className="text-2xl mb-2">📄</div>
-            No layers yet.<br />
-            <span className="text-xs">Add unlimited elements to get started!</span>
+          <div className="studio-empty-state flex flex-col items-center justify-center px-4 py-10 text-center">
+            <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Empty canvas
+            </div>
+            <p className="mt-4 text-sm font-semibold text-slate-700">No layers yet</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Add text, shapes, or images to start building your creative composition.
+            </p>
           </div>
         ) : (
           displayElements.map((element, displayIndex) => {
@@ -70,134 +134,110 @@ export const LayersPanel: React.FC = () => {
             const actualIndex = elements.length - 1 - displayIndex;
             const isTop = actualIndex === elements.length - 1;
             const isBottom = actualIndex === 0;
+            const { title, subtitle } = getElementDisplay(element);
 
             return (
               <div
                 key={element.id}
-                className={`
-                  group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all
-                  ${isSelected 
-                    ? 'bg-blue-100 border-2 border-blue-500 shadow-sm' 
-                    : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300'
-                  }
-                `}
+                className={`group rounded-2xl border p-3 transition-all ${
+                  isSelected
+                    ? 'border-emerald-300 bg-emerald-50/90 shadow-sm'
+                    : 'border-slate-200/80 bg-white/85 hover:border-slate-300 hover:bg-white'
+                }`}
                 onClick={() => selectElement(element.id)}
               >
-                {/* Icon */}
-                <div className={`
-                  flex-shrink-0 p-1.5 rounded
-                  ${isSelected ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}
-                `}>
-                  {getElementIcon(element.type)}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex-shrink-0 rounded-2xl p-2 ${
+                      isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {getElementIcon(element.type)}
+                  </div>
+
+                  <div className="min-w-0 flex-1" title={getElementLabel(element)}>
+                    <div
+                      className={`break-words text-sm font-semibold leading-5 ${
+                        isSelected ? 'text-emerald-950' : 'text-slate-700'
+                      }`}
+                    >
+                      {title}
+                    </div>
+                    {subtitle && <div className="mt-0.5 break-words text-xs leading-4 text-slate-500">{subtitle}</div>}
+                    <div className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                      Layer {actualIndex + 1}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Label */}
-                <div className="flex-1 min-w-0">
-                  <div className={`
-                    text-xs font-medium truncate
-                    ${isSelected ? 'text-blue-900' : 'text-gray-700'}
-                  `}>
-                    {getElementLabel(element)}
-                  </div>
-                  <div className="text-[10px] text-gray-500">
-                    Layer {actualIndex + 1}
-                  </div>
-                </div>
-
-                {/* Controls - Show on hover or when selected */}
-                <div className={`
-                  flex items-center gap-1 flex-shrink-0
-                  ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
-                  transition-opacity
-                `}>
-                  {/* Reorder buttons */}
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reorderElement(element.id, 'up');
-                      }}
-                      disabled={isTop}
-                      className={`
-                        p-0.5 rounded transition-colors
-                        ${isTop 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                        }
-                      `}
-                      title="Move layer up (forward)"
-                    >
-                      <MoveUp className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reorderElement(element.id, 'down');
-                      }}
-                      disabled={isBottom}
-                      className={`
-                        p-0.5 rounded transition-colors
-                        ${isBottom 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                        }
-                      `}
-                      title="Move layer down (backward)"
-                    >
-                      <MoveDown className="w-3 h-3" />
-                    </button>
-                  </div>
-
-                  {/* To Top/Bottom buttons */}
-                  <div className="flex flex-col gap-0.5 border-l border-gray-300 pl-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reorderElement(element.id, 'top');
-                      }}
-                      disabled={isTop}
-                      className={`
-                        p-0.5 rounded transition-colors
-                        ${isTop 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                        }
-                      `}
-                      title="Bring to front"
-                    >
-                      <ChevronsUp className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reorderElement(element.id, 'bottom');
-                      }}
-                      disabled={isBottom}
-                      className={`
-                        p-0.5 rounded transition-colors
-                        ${isBottom 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                        }
-                      `}
-                      title="Send to back"
-                    >
-                      <ChevronsDown className="w-3 h-3" />
-                    </button>
-                  </div>
-
-                  {/* Delete button */}
+                <div
+                  className={`mt-3 grid grid-cols-5 gap-1.5 transition-all ${
+                    isSelected ? 'max-h-16 opacity-100' : 'max-h-0 overflow-hidden opacity-0 group-hover:max-h-16 group-hover:opacity-100'
+                  }`}
+                >
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      reorderElement(element.id, 'up');
+                    }}
+                    disabled={isTop}
+                    className={`rounded-lg p-1.5 ${
+                      isTop ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    }`}
+                    title="Move layer up"
+                  >
+                    <MoveUp className="mx-auto h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      reorderElement(element.id, 'down');
+                    }}
+                    disabled={isBottom}
+                    className={`rounded-lg p-1.5 ${
+                      isBottom ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    }`}
+                    title="Move layer down"
+                  >
+                    <MoveDown className="mx-auto h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      reorderElement(element.id, 'top');
+                    }}
+                    disabled={isTop}
+                    className={`rounded-lg p-1.5 ${
+                      isTop ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    }`}
+                    title="Bring to front"
+                  >
+                    <ChevronsUp className="mx-auto h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      reorderElement(element.id, 'bottom');
+                    }}
+                    disabled={isBottom}
+                    className={`rounded-lg p-1.5 ${
+                      isBottom ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    }`}
+                    title="Send to back"
+                  >
+                    <ChevronsDown className="mx-auto h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
                       if (confirm(`Delete layer "${getElementLabel(element)}"?`)) {
                         removeElement(element.id);
                       }
                     }}
-                    className="p-1 rounded text-red-600 hover:bg-red-100 transition-colors ml-1"
+                    className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
                     title="Delete layer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="mx-auto h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -207,13 +247,8 @@ export const LayersPanel: React.FC = () => {
       </div>
 
       {elements.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200 text-[10px] text-gray-500 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <span>💡 Top layers = frontmost</span>
-            {elements.length > 5 && (
-              <span className="text-blue-600 font-semibold">↕ Scroll for more</span>
-            )}
-          </div>
+        <div className="mt-4 flex-shrink-0 rounded-2xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+          Top entries render in front. Use the controls to reorder the creative.
         </div>
       )}
     </div>
