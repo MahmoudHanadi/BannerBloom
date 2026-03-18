@@ -1,16 +1,20 @@
 import type { BannerSize, ExportType } from '../types/banner';
 
-const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
+const INVALID_FILENAME_CHARS = /[<>:"/\\|?*]/g;
 const EDGE_TRIM_PATTERN = /^[.\s_]+|[.\s_]+$/g;
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const DEFAULT_CAMPAIGN_FILE_BASENAME = 'Untitled_Campaign';
+
+const stripControlCharacters = (value: string) =>
+  Array.from(value)
+    .filter((character) => character.charCodeAt(0) >= 32)
+    .join('');
 
 export const sanitizeFilenameSegment = (
   value: string,
   fallback = DEFAULT_CAMPAIGN_FILE_BASENAME,
 ) => {
-  const sanitized = value
-    .trim()
+  const sanitized = stripControlCharacters(value.trim())
     .replace(INVALID_FILENAME_CHARS, '')
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
