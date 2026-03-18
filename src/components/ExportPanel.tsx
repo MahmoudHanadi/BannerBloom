@@ -37,6 +37,10 @@ const hasBlockingErrors = (issues: ExportValidationIssue[], allowSizeLimitBypass
     (issue) => issue.level === 'error' && (!allowSizeLimitBypass || !isSizeLimitIssue(issue)),
   );
 
+const isDynamicImportFailure = (message: string) =>
+  message.includes('Failed to fetch dynamically imported module') ||
+  message.includes('Importing a module script failed');
+
 export const ExportPanel: React.FC = () => {
   const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
   const bannerSizes = useBannerStore((state) => state.bannerSizes);
@@ -125,13 +129,16 @@ export const ExportPanel: React.FC = () => {
       downloadBlob(packaged.blob, packaged.filename);
     } catch (error) {
       console.error('Export failed:', error);
+      const runtimeMessage = error instanceof Error ? error.message : 'Failed to export banners.';
       setValidationIssues([
         ...preflightIssues,
         {
           id: 'runtime-export-error',
           level: 'error',
           code: 'runtime-error',
-          message: error instanceof Error ? error.message : 'Failed to export banners.',
+          message: isDynamicImportFailure(runtimeMessage)
+            ? 'Export tools failed to load. BannerBloom was likely updated in the background. Refresh the page and try again.'
+            : runtimeMessage,
         },
       ]);
     } finally {
