@@ -1,5 +1,9 @@
 import { generateAMP, generateHTML5 } from '../../utils/ampGenerator';
-import type { BannerElement, BannerPreset, BannerSize, ExportType, Override } from '../../types/banner';
+import type { BannerElement, BannerSize, ExportType, Override } from '../../types/banner';
+import {
+  getBatchExportFilename,
+  getBundleExportFilename,
+} from '../fileNaming';
 import { enqueueZipCreation } from './exportQueue';
 import { renderBannerToBlob } from './renderBanner';
 import type { ExportFile, RenderedBannerAsset } from './types';
@@ -23,10 +27,12 @@ export const renderSelectedBanners = async ({
   banners,
   elements,
   overrideMap,
+  projectName,
 }: {
   banners: BannerSize[];
   elements: BannerElement[];
   overrideMap: Record<string, Record<string, Override>>;
+  projectName: string;
 }) => {
   const results: RenderedBannerAsset[] = [];
 
@@ -36,6 +42,7 @@ export const renderSelectedBanners = async ({
         banner,
         elements,
         overrides: overrideMap[banner.id],
+        projectName,
       }),
     );
   }
@@ -44,13 +51,13 @@ export const renderSelectedBanners = async ({
 };
 
 export const packageRenderedBanners = async ({
-  preset,
   type,
   renderedBanners,
+  projectName,
 }: {
-  preset: BannerPreset;
   type: ExportType;
   renderedBanners: RenderedBannerAsset[];
+  projectName: string;
 }) => {
   if (type === 'png') {
     if (renderedBanners.length === 1) {
@@ -68,7 +75,7 @@ export const packageRenderedBanners = async ({
     const blob = await enqueueZipCreation(files);
     return {
       blob,
-      filename: `${preset.id}-images.zip`,
+      filename: getBatchExportFilename(projectName, type),
       perBannerSizes: renderedBanners.map((renderedBanner) => ({
         banner: renderedBanner.banner,
         size: renderedBanner.blob.size,
@@ -81,7 +88,7 @@ export const packageRenderedBanners = async ({
     const blob = await enqueueZipCreation(files);
     return {
       blob,
-      filename: `${renderedBanners[0].banner.name.replace(/\s+/g, '_')}_${type}.zip`,
+      filename: getBundleExportFilename(projectName, renderedBanners[0].banner, type),
       perBannerSizes: [{ banner: renderedBanners[0].banner, size: blob.size }],
     };
   }
@@ -93,7 +100,7 @@ export const packageRenderedBanners = async ({
     const bundleFiles = createHtmlBundleFiles(type, renderedBanner);
     const bundleBlob = await enqueueZipCreation(bundleFiles);
     batchFiles.push({
-      name: `${renderedBanner.banner.name.replace(/\s+/g, '_')}_${type}.zip`,
+      name: getBundleExportFilename(projectName, renderedBanner.banner, type),
       content: bundleBlob,
     });
     perBannerSizes.push({ banner: renderedBanner.banner, size: bundleBlob.size });
@@ -102,7 +109,7 @@ export const packageRenderedBanners = async ({
   const blob = await enqueueZipCreation(batchFiles);
   return {
     blob,
-    filename: `${preset.id}-${type}-batch.zip`,
+    filename: getBatchExportFilename(projectName, type),
     perBannerSizes,
   };
 };

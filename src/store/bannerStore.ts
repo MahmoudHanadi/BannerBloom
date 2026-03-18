@@ -38,6 +38,7 @@ import {
   type ProjectAssetRecord,
   type StoredProjectDocument,
 } from '../lib/projectStorage';
+import { getBackupFilename } from '../lib/fileNaming';
 import type {
   BackgroundConfig,
   BannerElement,
@@ -649,9 +650,6 @@ export const useBannerStore = create<BannerState>((set, get) => ({
                       fontSize: '60px',
                       borderRadius: '8px',
                       fontFamily: 'Inter',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
                     }
                   : {},
           },
@@ -1018,13 +1016,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    const fileName = state.projectName
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-    anchor.download = `${fileName || 'bannerbloom-project'}-${new Date()
-      .toISOString()
-      .slice(0, 10)}.bsp`;
+    anchor.download = getBackupFilename(state.projectName);
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);

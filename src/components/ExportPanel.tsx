@@ -46,13 +46,12 @@ export const ExportPanel: React.FC = () => {
   const bannerSizes = useBannerStore((state) => state.bannerSizes);
   const elements = useBannerStore((state) => state.elements);
   const overrides = useBannerStore((state) => state.overrides);
+  const projectName = useBannerStore((state) => state.projectName);
   const selectElement = useBannerStore((state) => state.selectElement);
+  const selectBanner = useBannerStore((state) => state.selectBanner);
 
   const preset = useMemo(() => getBannerPreset(bannerPresetId), [bannerPresetId]);
-  const exportableBanners = useMemo(
-    () => bannerSizes.filter((banner) => banner.exportable !== false && !isMasterBanner(banner)),
-    [bannerSizes],
-  );
+  const availableBanners = useMemo(() => bannerSizes, [bannerSizes]);
 
   const [selectedBanners, setSelectedBanners] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
@@ -74,7 +73,7 @@ export const ExportPanel: React.FC = () => {
   };
 
   const selectAll = () => {
-    setSelectedBanners(new Set(exportableBanners.map((banner) => banner.id)));
+    setSelectedBanners(new Set(availableBanners.map((banner) => banner.id)));
   };
 
   const deselectAll = () => {
@@ -84,8 +83,8 @@ export const ExportPanel: React.FC = () => {
   const runExport = async (type: ExportType) => {
     const bannersToExport =
       selectedBanners.size > 0
-        ? exportableBanners.filter((banner) => selectedBanners.has(banner.id))
-        : exportableBanners;
+        ? availableBanners.filter((banner) => selectedBanners.has(banner.id))
+        : availableBanners;
 
     const preflightIssues = validateExportSelection(preset, bannersToExport, type);
     setValidationIssues(preflightIssues);
@@ -97,6 +96,7 @@ export const ExportPanel: React.FC = () => {
     setIsExporting(true);
     setExportType(type);
     selectElement(null);
+    selectBanner(null);
 
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
@@ -108,12 +108,13 @@ export const ExportPanel: React.FC = () => {
         banners: bannersToExport,
         elements,
         overrideMap: overrides,
+        projectName,
       });
 
       const packaged = await packageRenderedBanners({
-        preset,
         type,
         renderedBanners,
+        projectName,
       });
 
       const generatedIssues = packaged.perBannerSizes.flatMap(({ banner, size }) =>
@@ -253,9 +254,9 @@ export const ExportPanel: React.FC = () => {
               <span>{preset.description}</span>
             </div>
               <p className="mt-2 text-xs text-slate-500">
-                Supported outputs: {preset.supportedExportTypes.map((type) => type.toUpperCase()).join(', ')}. Source canvases stay in the editor and are excluded from export.
-              </p>
-            </div>
+                Supported outputs: {preset.supportedExportTypes.map((type) => type.toUpperCase()).join(', ')}. All canvases in this preset, including source sizes, can be exported.
+               </p>
+             </div>
 
           {validationIssues.length > 0 && (
             <div className="space-y-2">{validationIssues.map(renderValidationIssue)}</div>
@@ -278,7 +279,7 @@ export const ExportPanel: React.FC = () => {
           </label>
 
           <div className="grid max-h-48 grid-cols-1 gap-3 overflow-y-auto pr-2 custom-scrollbar sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {exportableBanners.map((banner) => (
+            {availableBanners.map((banner) => (
               <label
                 key={banner.id}
                 className={`
@@ -333,7 +334,12 @@ export const ExportPanel: React.FC = () => {
                   <span className="text-xs text-gray-500">
                     {banner.width} x {banner.height}
                   </span>
-                  {banner.notes && (
+                  {isMasterBanner(banner) && (
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                      Source canvas
+                    </span>
+                  )}
+                  {banner.notes && !isMasterBanner(banner) && (
                     <span className="text-[11px] font-medium text-gray-400">{banner.notes}</span>
                   )}
                 </div>

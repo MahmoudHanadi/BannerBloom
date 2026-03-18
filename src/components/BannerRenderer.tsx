@@ -14,6 +14,7 @@ interface BannerRendererProps {
   category: 'square' | 'horizontal' | 'vertical';
   customScale?: number;
   isExport?: boolean;
+  suppressButtonText?: boolean;
 }
 
 export const BannerRenderer: React.FC<BannerRendererProps> = ({
@@ -26,6 +27,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   category,
   customScale,
   isExport,
+  suppressButtonText,
 }) => {
   const selectElement = useBannerStore((state) => state.selectElement);
   const selectBanner = useBannerStore((state) => state.selectBanner);
@@ -334,9 +336,40 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     }
   };
 
+  const getButtonHorizontalAlign = (align?: React.CSSProperties['textAlign']) => {
+    switch (align) {
+      case 'left':
+        return 'left';
+      case 'right':
+        return 'right';
+      default:
+        return 'center';
+    }
+  };
+
+  const getButtonTextPosition = (align: string | undefined, buffer: number): React.CSSProperties => {
+    switch (align) {
+      case 'top':
+        return { top: buffer };
+      case 'bottom':
+        return { bottom: buffer };
+      default:
+        return {
+          top: '50%',
+          transform: 'translateY(-50%)',
+        };
+    }
+  };
+
   const selectedBannerId = useBannerStore((state) => state.selectedBannerId);
   const isSelected = selectedBannerId === bannerId;
   const isIsolated = isolatedBannerId === bannerId;
+  const containerClassName =
+    !isExport && isIsolated
+      ? 'ring-4 ring-emerald-200'
+      : !isExport && isSelected
+        ? 'ring-4 ring-teal-100'
+        : '';
 
   // Handle triple-click to toggle isolated mode
   const handleBannerClick = () => {
@@ -388,7 +421,10 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   return (
     <div
       ref={containerRef}
+      data-banner-renderer-id={bannerId}
       style={{
+        position: 'relative',
+        userSelect: 'none',
         width: displayWidth,
         height: displayHeight,
         border: isExport ? 'none' : isIsolated ? '3px solid #19C37D' : isMaster ? '2px solid #19C37D' : isSelected ? '2px solid #0EA5A4' : '1px solid rgba(148, 163, 184, 0.32)',
@@ -401,13 +437,17 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         overflow: isSelected && !isExport ? 'visible' : 'hidden',
         zIndex: isSelected ? 50 : 1,
         borderRadius: isExport ? 0 : 20,
+        boxShadow: !isExport ? '0 14px 30px rgba(15, 23, 42, 0.12)' : undefined,
       }}
-      className={`relative select-none bg-white ${!isExport ? 'shadow-[0_14px_30px_rgba(15,23,42,0.12)]' : ''} ${isIsolated && !isExport ? 'ring-4 ring-emerald-200' : isSelected && !isExport ? 'ring-4 ring-teal-100' : ''}`}
+      className={containerClassName}
       onClick={handleBannerClick}
     >
       {/* Isolated Mode Indicator */}
       {isIsolated && !isExport && (
-        <div className="absolute right-0 top-0 z-[9999] rounded-bl-xl bg-emerald-500 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white shadow-md">
+        <div
+          data-banner-editor-only="true"
+          className="absolute right-0 top-0 z-[9999] rounded-bl-xl bg-emerald-500 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white shadow-md"
+        >
           PLACEMENT FOCUS
         </div>
       )}
@@ -415,6 +455,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       {elements.map((el, index) => {
         const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
         const isElSelected = el.id === selectedElementId && !isExport;
+        const buttonPaddingY = Math.max(2, 4 * scale);
+        const buttonPaddingX = Math.max(4, 8 * scale);
         // Fix Layer Order: Use array index for z-index when not selected, so DOM order (layer order) is respected.
         // Selected element gets promoted to 1000 to be on top of handles, but efficient lookups needed?
         // Actually, just index + 1 is fine for base. Selected can be index + 1000 or just 1000.
@@ -440,11 +482,20 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                   ...getShapeStyle(el.shapeType)
                 } : {}),
                 ...(el.type === 'button' ? {
+                  display: 'block',
+                  alignItems: undefined,
+                  justifyContent: undefined,
+                  verticalAlign: undefined,
+                  textAlign: undefined,
+                  fontSize: undefined,
+                  fontFamily: undefined,
+                  fontWeight: undefined,
+                  color: undefined,
+                  lineHeight: undefined,
                   backgroundColor: layout.mergedStyle.backgroundColor || '#19C37D',
                   borderRadius: layout.mergedStyle.borderRadius || '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: 0,
                 } : {}),
                 cursor: isDragging ? 'grabbing' : 'move',
                 boxSizing: 'border-box',
@@ -491,23 +542,39 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
                   {layout.content}
                 </div>
               )}
-              {el.type === 'image' && <img src={layout.content} alt="" className="w-full h-full pointer-events-none" style={{ objectFit: 'fill' }} />}
-              {el.type === 'button' && (
+              {el.type === 'image' && (
+                <img
+                  src={layout.content}
+                  alt=""
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    objectFit: 'fill',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
+              {el.type === 'button' && !suppressButtonText && (
                 <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: layout.mergedStyle.verticalAlign === 'top' ? 'flex-start' : layout.mergedStyle.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                  justifyContent: layout.mergedStyle.textAlign === 'left' ? 'flex-start' : layout.mergedStyle.textAlign === 'right' ? 'flex-end' : 'center',
+                  position: 'absolute',
+                  left: buttonPaddingX,
+                  right: buttonPaddingX,
+                  ...getButtonTextPosition(layout.mergedStyle.verticalAlign as string | undefined, buttonPaddingY),
+                  display: 'block',
                   fontSize: `${layout.displayFontSize}px`,
                   fontFamily: layout.mergedStyle.fontFamily,
                   fontWeight: layout.mergedStyle.fontWeight || 'bold',
                   color: layout.mergedStyle.color || '#ffffff',
-                  textAlign: (layout.mergedStyle.textAlign as React.CSSProperties['textAlign']) || 'center',
-                  padding: `${4 * scale}px ${8 * scale}px`,
+                  textAlign: getButtonHorizontalAlign(
+                    layout.mergedStyle.textAlign as React.CSSProperties['textAlign'] | undefined,
+                  ),
+                  lineHeight: 1,
+                  whiteSpace: 'pre-wrap',
+                  overflow: 'hidden',
                   pointerEvents: 'none',
                 }}>
-                  {layout.content}
+                  <span style={{ display: 'block', maxWidth: '100%' }}>{layout.content}</span>
                 </div>
               )}
             </div>

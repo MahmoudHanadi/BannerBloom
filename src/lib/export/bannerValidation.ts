@@ -24,17 +24,9 @@ const createIssue = (
 });
 
 const getBannerDimensionsKey = (banner: BannerSize) => `${banner.width}x${banner.height}`;
-const isMasterBanner = (banner: BannerSize) =>
-  banner.isMaster ||
-  banner.name.toLowerCase().includes('master') ||
-  banner.name.toLowerCase().includes('source');
 
-const getPresetExportableSizeSet = (preset: BannerPreset) =>
-  new Set(
-    preset.bannerSizes
-      .filter((size) => size.exportable !== false && !isMasterBanner(size))
-      .map(getBannerDimensionsKey),
-  );
+const getPresetAllowedSizeSet = (preset: BannerPreset) =>
+  new Set(preset.bannerSizes.map(getBannerDimensionsKey));
 
 export const validateExportSelection = (
   preset: BannerPreset,
@@ -53,22 +45,10 @@ export const validateExportSelection = (
     );
   }
 
-  const blockedMasters = banners.filter((banner) => banner.exportable === false || isMasterBanner(banner));
-  for (const banner of blockedMasters) {
-    issues.push(
-      createIssue(
-        'error',
-        `${banner.name} is a source canvas and should not be exported.`,
-        'design-master',
-        banner.id,
-      ),
-    );
-  }
-
   if (preset.validationProfile === 'google-upload') {
-    const allowedSizeSet = getPresetExportableSizeSet(preset);
+    const allowedSizeSet = getPresetAllowedSizeSet(preset);
 
-    for (const banner of banners.filter((item) => item.exportable !== false && !isMasterBanner(item))) {
+    for (const banner of banners) {
       if (!allowedSizeSet.has(getBannerDimensionsKey(banner))) {
         issues.push(
           createIssue(
@@ -110,11 +90,10 @@ export const validateExportSelection = (
   }
 
   if (preset.validationProfile === 'google-responsive-display') {
-    const exportableBanners = banners.filter((item) => item.exportable !== false && !isMasterBanner(item));
-    const allowedSizeSet = getPresetExportableSizeSet(preset);
-    const availableCategories = new Set(exportableBanners.map((banner) => banner.category));
+    const allowedSizeSet = getPresetAllowedSizeSet(preset);
+    const availableCategories = new Set(banners.map((banner) => banner.category));
 
-    for (const banner of exportableBanners) {
+    for (const banner of banners) {
       if (!allowedSizeSet.has(getBannerDimensionsKey(banner))) {
         issues.push(
           createIssue(
@@ -131,7 +110,7 @@ export const validateExportSelection = (
       if (!availableCategories.has(category)) {
         issues.push(
           createIssue(
-            'error',
+            'warning',
             'Google Responsive Display exports should include at least one landscape and one square image.',
             'responsive-missing-category',
           ),
@@ -140,10 +119,10 @@ export const validateExportSelection = (
       }
     }
 
-    const hasRecommendedLandscape = exportableBanners.some(
+    const hasRecommendedLandscape = banners.some(
       (banner) => getBannerDimensionsKey(banner) === '1200x628',
     );
-    const hasRecommendedSquare = exportableBanners.some(
+    const hasRecommendedSquare = banners.some(
       (banner) => getBannerDimensionsKey(banner) === '1200x1200',
     );
 
