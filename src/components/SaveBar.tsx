@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useBannerStore } from '../store/bannerStore';
 import { Save, Clock, Edit2, Check, Download, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
+import { bannerBloomMarkUrl } from '../lib/brandAssets';
 
 interface SaveBarProps {
   isCollapsed: boolean;
@@ -19,6 +20,8 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(projectName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [lastSavedLabel, setLastSavedLabel] = useState('Never');
+  const hasTrackedChanges = useRef(false);
 
   useEffect(() => {
     const checkInitialProjects = async () => {
@@ -54,7 +57,14 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
 
   useEffect(() => {
-    setSaveStatus('unsaved');
+    if (!hasTrackedChanges.current) {
+      hasTrackedChanges.current = true;
+      return;
+    }
+
+    const unsavedTimeout = setTimeout(() => {
+      setSaveStatus('unsaved');
+    }, 0);
 
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
@@ -62,8 +72,49 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
       setTimeout(() => setSaveStatus('saved'), 500);
     }, 2000);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(unsavedTimeout);
+      clearTimeout(timeout);
+    };
   }, [elements, overrides, background, bannerPresetId, saveCurrentProject]);
+
+  useEffect(() => {
+    const updateLastSavedLabel = () => {
+      if (!lastSaved) {
+        setLastSavedLabel('Never');
+        return;
+      }
+
+      const diff = Date.now() - lastSaved;
+
+      if (diff < 60000) {
+        setLastSavedLabel('Just now');
+        return;
+      }
+
+      if (diff < 3600000) {
+        setLastSavedLabel(`${Math.floor(diff / 60000)}m ago`);
+        return;
+      }
+
+      if (diff < 86400000) {
+        setLastSavedLabel(`${Math.floor(diff / 3600000)}h ago`);
+        return;
+      }
+
+      setLastSavedLabel(new Date(lastSaved).toLocaleDateString());
+    };
+
+    updateLastSavedLabel();
+
+    if (!lastSaved) {
+      return;
+    }
+
+    const interval = setInterval(updateLastSavedLabel, 60000);
+
+    return () => clearInterval(interval);
+  }, [lastSaved]);
 
   const handleSaveClick = () => {
     setSaveStatus('saving');
@@ -79,17 +130,6 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
     setProjectName(tempName.trim());
     setIsEditingName(false);
     saveCurrentProject();
-  };
-
-  const formatLastSaved = () => {
-    if (!lastSaved) return 'Never';
-    const now = Date.now();
-    const diff = now - lastSaved;
-
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return new Date(lastSaved).toLocaleDateString();
   };
 
   if (isCollapsed) {
@@ -118,7 +158,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
     <div className="studio-topbar mx-3 mt-3 flex items-center justify-between gap-4 rounded-[1.35rem] border px-5 py-2.5">
       <div className="flex min-w-0 items-center gap-4">
         <div className="flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/70 bg-white/75 px-3 py-2 shadow-sm">
-          <img src="/bannerbloom-mark.svg" alt="BannerBloom" className="h-10 w-10 rounded-xl" />
+          <img src={bannerBloomMarkUrl} alt="BannerBloom" className="h-10 w-10 rounded-xl" />
           <div>
             <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
               BannerBloom
@@ -183,7 +223,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
               <span>Unsaved changes</span>
             </div>
           )}
-          <span className="text-sm text-slate-500">Last saved {formatLastSaved()}</span>
+          <span className="text-sm text-slate-500">Last saved {lastSavedLabel}</span>
         </div>
       </div>
 

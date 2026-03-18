@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useBannerStore } from '../store/bannerStore';
 import { Plus, FolderOpen, MoreVertical, Trash2, Copy, Edit2, X, Clock, Folder, FolderPlus, ChevronDown, ChevronRight, Move } from 'lucide-react';
 import type { ProjectSummary, Folder as FolderType } from '../store/bannerStore';
+import { bannerBloomMarkUrl } from '../lib/brandAssets';
 
 export const ProjectGallery: React.FC = () => {
   const showGallery = useBannerStore((state) => state.showGallery);
@@ -266,7 +267,7 @@ export const ProjectGallery: React.FC = () => {
         <div className="flex items-center justify-between border-b border-slate-200/70 bg-white/70 p-6 backdrop-blur-xl">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-3 text-white shadow-lg">
-              <img src="/bannerbloom-mark.svg" alt="BannerBloom" className="h-7 w-7 rounded-lg bg-white/20 p-0.5" />
+              <img src={bannerBloomMarkUrl} alt="BannerBloom" className="h-7 w-7 rounded-lg bg-white/20 p-0.5" />
             </div>
             <div>
               <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -317,7 +318,7 @@ export const ProjectGallery: React.FC = () => {
             <div className="flex h-full flex-col items-center justify-center">
               <div className="studio-empty-state max-w-xl px-10 py-12 text-center">
                 <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 shadow-lg">
-                  <img src="/bannerbloom-mark.svg" alt="BannerBloom" className="h-12 w-12 rounded-2xl" />
+                  <img src={bannerBloomMarkUrl} alt="BannerBloom" className="h-12 w-12 rounded-2xl" />
                 </div>
                 <div className="mb-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">BannerBloom</div>
                 <h3 className="mb-3 text-2xl font-bold text-slate-900">Create once. Deploy everywhere.</h3>
