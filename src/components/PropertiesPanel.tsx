@@ -130,7 +130,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
 
                 <InspectorSection title="Background">
                 <div className="space-y-4">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {['solid', 'gradient', 'image'].map(t => (
                             <button
                                 key={t}
@@ -380,7 +380,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                 {/* Alignment */}
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-black uppercase tracking-wide">Alignment</label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="studio-inspector-alignment-grid grid grid-cols-3 gap-2">
                         <button
                             onClick={() => alignElementToBanner('x', 'start')}
                             className="bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
@@ -432,7 +432,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                 {/* Layering */}
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-black uppercase tracking-wide">Layer Order</label>
-                    <div className="flex gap-2">
+                    <div className="studio-inspector-layer-order flex flex-wrap gap-2">
                         <button
                             onClick={() => reorderElement(selectedElement.id, 'top')}
                             className="flex-1 bg-gray-100 hover:bg-gray-200 p-2 rounded flex justify-center border border-gray-300 text-gray-800"
@@ -464,7 +464,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="studio-inspector-metrics-grid grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-bold text-black mb-1.5">X Position (%)</label>
                         <input
@@ -567,7 +567,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="studio-inspector-font-grid grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-bold text-black mb-1.5">Font Size (px)</label>
                             <input
@@ -612,7 +612,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                     <div className="space-y-2.5">
                         <h5 className="text-xs font-bold text-gray-500 uppercase">Text Alignment</h5>
                         <div className="grid grid-cols-1 gap-3">
-                            <div className="flex items-center gap-2">
+                            <div className="studio-inspector-text-row flex items-center gap-2">
                                 <div className="flex-1">
                                     <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Horizontal</label>
                                     <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
@@ -640,7 +640,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ isCollapsed, o
                                     </div>
                                 </div>
 
-                                <div className="w-24">
+                                <div className="studio-inspector-direction w-24">
                                     <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Direction</label>
                                     <div className="flex border border-gray-300 rounded overflow-hidden bg-white">
                                         <button

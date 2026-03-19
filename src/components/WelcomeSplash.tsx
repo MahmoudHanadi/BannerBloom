@@ -8,7 +8,7 @@ interface WelcomeSplashProps {
 
 export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onEnterLibrary }) => (
   <div
-    className="studio-launch-splash fixed inset-0 z-[11000] flex items-center justify-center overflow-hidden px-5 py-6"
+    className="studio-launch-splash fixed inset-0 z-[11000] flex items-center justify-center overflow-y-auto overflow-x-hidden px-5 py-6"
     role="dialog"
     aria-modal="true"
     aria-labelledby="bannerbloom-launch-title"
@@ -16,8 +16,8 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onEnterLibrary }) 
     <div className="studio-launch-splash__orb studio-launch-splash__orb--left" aria-hidden="true" />
     <div className="studio-launch-splash__orb studio-launch-splash__orb--right" aria-hidden="true" />
 
-    <div className="studio-launch-card relative w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/60 bg-white/78 shadow-[0_28px_90px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
-      <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] lg:gap-10 lg:p-10">
+    <div className="studio-launch-card relative w-full max-w-6xl overflow-x-hidden overflow-y-auto rounded-[2rem] border border-white/60 bg-white/78 shadow-[0_28px_90px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
+      <div className="studio-launch-grid grid gap-8 p-6 md:p-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] lg:gap-10 lg:p-10">
         <div className="relative z-10 flex flex-col justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-800">

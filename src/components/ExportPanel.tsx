@@ -208,7 +208,7 @@ export const ExportPanel: React.FC = () => {
   return (
     <div className="studio-export-panel border-t transition-all duration-300">
       <div
-        className="flex cursor-pointer items-center justify-between px-6 py-4 hover:bg-white/40"
+        className="studio-export-header flex cursor-pointer flex-wrap items-start justify-between gap-3 px-6 py-4 hover:bg-white/40"
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <div>
@@ -227,7 +227,10 @@ export const ExportPanel: React.FC = () => {
           )}
         </div>
         {!isCollapsed && (
-          <div className="flex gap-3" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="studio-export-header-actions flex flex-wrap gap-3"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button
               onClick={selectAll}
               className="rounded-md px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
@@ -278,7 +281,7 @@ export const ExportPanel: React.FC = () => {
             </div>
           </label>
 
-          <div className="grid max-h-48 grid-cols-1 gap-3 overflow-y-auto pr-2 custom-scrollbar sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="studio-export-grid grid max-h-48 grid-cols-1 gap-3 overflow-y-auto pr-2 custom-scrollbar">
             {availableBanners.map((banner) => (
               <label
                 key={banner.id}
@@ -347,7 +350,7 @@ export const ExportPanel: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="studio-export-actions grid gap-3">
             {actionButton(
               'png',
               'Export PNG set',

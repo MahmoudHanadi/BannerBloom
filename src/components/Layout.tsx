@@ -31,7 +31,7 @@ export const Layout: React.FC = () => {
     }, [setShowGallery]);
 
     return (
-        <div className="studio-shell flex h-screen min-h-0 w-screen flex-col overflow-hidden text-slate-900">
+        <div className="studio-shell flex h-screen min-h-0 w-full min-w-0 flex-col overflow-hidden text-slate-900">
             <SaveBar
                 isCollapsed={isTopbarCollapsed}
                 onToggleCollapse={() => setIsTopbarCollapsed((current) => !current)}
@@ -41,7 +41,7 @@ export const Layout: React.FC = () => {
                     isCollapsed={isSidebarCollapsed}
                     onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
                 />
-                <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] border border-white/40 bg-white/35 shadow-[0_16px_48px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+                <div className="studio-main-stage relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] border border-white/40 bg-white/35 shadow-[0_16px_48px_rgba(15,23,42,0.08)] backdrop-blur-sm">
                     <CanvasArea />
                     <ExportPanel />
                 </div>

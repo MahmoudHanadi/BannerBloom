@@ -261,11 +261,11 @@ export const ProjectGallery: React.FC = () => {
   const uncategorizedProjects = projects.filter(p => !p.folderId);
 
   return (
-    <div className="studio-gallery fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full flex flex-col">
+    <div className="studio-gallery fixed inset-0 z-[10000] flex items-stretch justify-stretch overflow-hidden">
+      <div className="studio-gallery-shell flex h-full min-h-full w-full flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200/70 bg-white/70 p-6 backdrop-blur-xl">
-          <div className="flex items-center gap-4">
+        <div className="studio-gallery-header flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/70 bg-white/70 p-6 backdrop-blur-xl">
+          <div className="studio-gallery-header__meta flex min-w-0 flex-wrap items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-3 text-white shadow-lg">
               <img src={bannerBloomMarkUrl} alt="BannerBloom" className="h-7 w-7 rounded-lg bg-white/20 p-0.5" />
             </div>
@@ -285,7 +285,7 @@ export const ProjectGallery: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="studio-gallery-header__actions flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowNewFolderDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-all shadow-sm"
@@ -313,7 +313,7 @@ export const ProjectGallery: React.FC = () => {
         </div>
 
         {/* Projects Grid with Folders */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="studio-gallery-content flex-1 overflow-y-auto p-8">
           {projects.length === 0 && folders.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center">
               <div className="studio-empty-state max-w-xl px-10 py-12 text-center">

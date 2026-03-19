@@ -140,9 +140,9 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   }
 
   return (
-    <div className="studio-topbar mx-3 mt-3 flex items-center justify-between gap-4 rounded-[1.35rem] border px-5 py-2.5">
-      <div className="flex min-w-0 items-center gap-4">
-        <div className="flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/70 bg-white/75 px-3 py-2 shadow-sm">
+    <div className="studio-topbar studio-savebar mx-3 mt-3 flex flex-wrap items-start justify-between gap-4 rounded-[1.35rem] border px-5 py-3">
+      <div className="studio-savebar__primary flex min-w-0 flex-1 flex-wrap items-center gap-4">
+        <div className="studio-savebar__brand flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/70 bg-white/75 px-3 py-2 shadow-sm">
           <img src={bannerBloomMarkUrl} alt="BannerBloom" className="h-10 w-10 rounded-xl" />
           <div>
             <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -153,7 +153,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
         </div>
 
         {isEditingName ? (
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="studio-savebar__project flex min-w-0 items-center gap-2">
             <input
               type="text"
               value={tempName}
@@ -179,7 +179,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
               setIsEditingName(true);
               setTempName(projectName);
             }}
-            className="group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-left transition-colors hover:border-slate-200 hover:bg-white/75"
+            className="studio-savebar__project group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-left transition-colors hover:border-slate-200 hover:bg-white/75"
           >
             <div className="min-w-0">
               <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -191,7 +191,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
           </button>
         )}
 
-        <div className="flex items-center gap-2 text-sm">
+        <div className="studio-savebar__status flex flex-wrap items-center gap-2 text-sm">
           {saveStatus === 'saving' ? (
             <div className="studio-pill studio-pill-primary">
               <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-600" />
@@ -212,7 +212,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="studio-savebar__actions flex shrink-0 flex-wrap items-center justify-end gap-3">
         <button
           onClick={onToggleCollapse}
           className="studio-panel-toggle"
@@ -228,7 +228,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
         >
           <LayoutGrid className="h-4 w-4" />
           Library
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold text-slate-500 group-hover:bg-slate-200">
+          <span className="studio-savebar__shortcut rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold text-slate-500 group-hover:bg-slate-200">
             Ctrl+H
           </span>
         </button>
