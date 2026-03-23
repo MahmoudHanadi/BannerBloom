@@ -90,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
 
   if (isCollapsed) {
     return (
-      <div className="studio-sidebar studio-sidebar-collapsed flex h-full min-h-0 flex-col items-center justify-start gap-4 overflow-hidden rounded-[1.35rem] border px-2 py-3">
+      <div className="studio-sidebar studio-sidebar-collapsed flex h-full min-h-0 flex-col items-center justify-start gap-5 overflow-hidden rounded-[1.35rem] border px-2 py-3">
         <button
           onClick={onToggleCollapse}
           className="studio-panel-toggle"
@@ -105,12 +105,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
 
   return (
     <div className="studio-sidebar flex h-full min-h-0 flex-col overflow-hidden rounded-[1.35rem] border">
-      <div className="studio-sidebar-header flex items-center justify-between border-b border-slate-200/70 px-3 pb-3 pt-3">
-        <div>
+      <div className="studio-sidebar-header flex items-start justify-between gap-3 border-b border-slate-200/70 px-4 pb-4 pt-4">
+        <div className="min-w-0">
           <div className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Creative system
           </div>
-          <div className="mt-1 text-sm font-semibold text-slate-800">Build campaign</div>
+          <div className="mt-1 text-base font-semibold text-slate-800">Build campaign</div>
+          <p className="studio-sidebar-header-note">
+            Keep tools close while you move around the canvas.
+          </p>
         </div>
         <button
           onClick={onToggleCollapse}
@@ -121,8 +124,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
         </button>
       </div>
 
-      <div className="studio-sidebar-scroll flex h-full flex-col overflow-y-auto px-3 py-3 pr-2">
-        <div className="studio-section-card studio-sidebar-card studio-sidebar-hero rounded-[1.15rem]">
+      <div className="studio-sidebar-scroll flex h-full flex-col overflow-y-auto px-4 py-4 pr-3">
+        <div className="studio-section-card studio-sidebar-card shrink-0 studio-sidebar-hero rounded-[1.25rem]">
           <button
             type="button"
             onClick={() => toggleSection('target')}
@@ -191,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
           )}
         </div>
 
-        <div className="studio-section-card studio-sidebar-card rounded-[1.15rem]">
+        <div className="studio-section-card studio-sidebar-card shrink-0 rounded-[1.25rem]">
           <button
             type="button"
             onClick={() => toggleSection('workspace')}
@@ -218,14 +221,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
 
           {openSections.workspace && (
             <>
-              <button
-                onClick={() => setShowGallery(true)}
-                className="mt-3 studio-button-primary flex w-full items-center justify-center gap-2 px-4 py-2.5"
-                title="Open campaign library (Ctrl+H)"
-              >
-                <Home className="h-4 w-4" />
-                Campaign library
-              </button>
               <input
                 type="file"
                 ref={projectInputRef}
@@ -233,21 +228,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                 accept=".bsp,.json"
                 className="hidden"
               />
-              <button
-                onClick={() => projectInputRef.current?.click()}
-                className="studio-button-ghost mt-2 flex w-full items-center justify-center gap-2 px-4 py-2.5"
-              >
-                <FolderUp className="h-4 w-4" />
-                Import campaign file
-              </button>
-              <p className="mt-3 text-sm text-slate-500">
-                Open saved campaigns or load a `.bsp` / `.json` file directly into the current workspace.
-              </p>
+              <div className="studio-sidebar-actions mt-4">
+                <button
+                  onClick={() => setShowGallery(true)}
+                  className="studio-sidebar-action studio-sidebar-action-primary"
+                  title="Open campaign library (Ctrl+H)"
+                >
+                  <span className="studio-sidebar-action-icon">
+                    <Home className="h-4 w-4" />
+                  </span>
+                  <span className="studio-sidebar-action-copy">
+                    <span className="studio-sidebar-action-title">Campaign library</span>
+                    <span className="studio-sidebar-action-subtitle">
+                      Open saved work and recent campaigns.
+                    </span>
+                  </span>
+                  <ChevronRight className="studio-sidebar-action-chevron h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => projectInputRef.current?.click()}
+                  className="studio-sidebar-action"
+                >
+                  <span className="studio-sidebar-action-icon studio-sidebar-action-icon-secondary">
+                    <FolderUp className="h-4 w-4" />
+                  </span>
+                  <span className="studio-sidebar-action-copy">
+                    <span className="studio-sidebar-action-title">Import campaign file</span>
+                    <span className="studio-sidebar-action-subtitle">
+                      Load a `.bsp` or `.json` file into the current workspace.
+                    </span>
+                  </span>
+                  <ChevronRight className="studio-sidebar-action-chevron h-4 w-4" />
+                </button>
+              </div>
             </>
           )}
         </div>
 
-        <div className="studio-section-card studio-sidebar-card rounded-[1.15rem]">
+        <div className="studio-section-card studio-sidebar-card shrink-0 rounded-[1.25rem]">
           <button
             type="button"
             onClick={() => toggleSection('elements')}
@@ -266,7 +284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                 </div>
               )}
               <span className="studio-sidebar-section-toggle-meta">
-                {openSections.elements && <span className="studio-pill studio-pill-neutral">Paste copy or images</span>}
+                {openSections.elements && <span className="studio-pill studio-pill-neutral">Text & images</span>}
                 {openSections.elements ? (
                   <ChevronDown className="h-4 w-4 text-slate-400" />
                 ) : (
@@ -363,7 +381,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
         </div>
 
         <div
-          className={`studio-section-card studio-sidebar-card rounded-[1.15rem] ${
+          className={`studio-section-card studio-sidebar-card rounded-[1.25rem] ${
             openSections.layers ? 'studio-layers-card flex min-h-[180px] flex-1 flex-col' : ''
           }`}
         >

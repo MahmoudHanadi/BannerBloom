@@ -117,9 +117,9 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+      <div className="flex-1 space-y-1.5 overflow-y-auto pr-1">
         {displayElements.length === 0 ? (
-          <div className="studio-empty-state flex flex-col items-center justify-center px-4 py-10 text-center">
+          <div className="studio-empty-state flex flex-col items-center justify-center px-4 py-8 text-center">
             <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
               Empty canvas
             </div>
@@ -139,40 +139,65 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
             return (
               <div
                 key={element.id}
-                className={`group rounded-2xl border p-3 transition-all ${
+                className={`group cursor-pointer rounded-[1.05rem] border px-3 py-2.5 transition-all ${
                   isSelected
-                    ? 'border-emerald-300 bg-emerald-50/90 shadow-sm'
-                    : 'border-slate-200/80 bg-white/85 hover:border-slate-300 hover:bg-white'
+                    ? 'border-emerald-300 bg-emerald-50/90 shadow-[0_14px_28px_rgba(16,185,129,0.14)] ring-1 ring-emerald-100'
+                    : 'border-slate-200/80 bg-white/90 hover:-translate-y-[1px] hover:border-slate-300 hover:bg-white hover:shadow-[0_12px_24px_rgba(15,23,42,0.08)]'
                 }`}
                 onClick={() => selectElement(element.id)}
+                onKeyDown={(event) => {
+                  if (event.currentTarget !== event.target) {
+                    return;
+                  }
+
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectElement(element.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <div className="flex items-start gap-3">
                   <div
-                    className={`flex-shrink-0 rounded-2xl p-2 ${
-                      isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[0.85rem] ${
+                      isSelected ? 'bg-emerald-600 text-white shadow-[0_12px_20px_rgba(16,185,129,0.24)]' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {getElementIcon(element.type)}
                   </div>
 
                   <div className="min-w-0 flex-1" title={getElementLabel(element)}>
-                    <div
-                      className={`break-words text-sm font-semibold leading-5 ${
-                        isSelected ? 'text-emerald-950' : 'text-slate-700'
-                      }`}
-                    >
-                      {title}
+                    <div className="flex items-start justify-between gap-2">
+                      <div
+                        className={`break-words text-sm font-semibold leading-5 ${
+                          isSelected ? 'text-emerald-950' : 'text-slate-700'
+                        }`}
+                      >
+                        {title}
+                      </div>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                          isSelected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        L{actualIndex + 1}
+                      </span>
                     </div>
-                    {subtitle && <div className="mt-0.5 break-words text-xs leading-4 text-slate-500">{subtitle}</div>}
-                    <div className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                      Layer {actualIndex + 1}
+                    {subtitle && (
+                      <div className="mt-1 break-words text-xs leading-4 text-slate-500">{subtitle}</div>
+                    )}
+                    <div className="mt-2 text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                      {element.type}
                     </div>
                   </div>
                 </div>
 
                 <div
-                  className={`mt-3 grid grid-cols-5 gap-1.5 transition-all ${
-                    isSelected ? 'max-h-16 opacity-100' : 'max-h-0 overflow-hidden opacity-0 group-hover:max-h-16 group-hover:opacity-100'
+                  className={`mt-2.5 grid grid-cols-5 gap-1.5 border-t border-slate-200/70 pt-2 transition-all ${
+                    isSelected
+                      ? 'max-h-20 opacity-100'
+                      : 'max-h-0 overflow-hidden border-t-transparent pt-0 opacity-0 group-hover:max-h-20 group-hover:border-slate-200/70 group-hover:pt-2 group-hover:opacity-100'
                   }`}
                 >
                   <button
@@ -181,8 +206,10 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
                       reorderElement(element.id, 'up');
                     }}
                     disabled={isTop}
-                    className={`rounded-lg p-1.5 ${
-                      isTop ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    className={`rounded-xl p-2 ${
+                      isTop
+                        ? 'cursor-not-allowed text-slate-300'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
                     }`}
                     title="Move layer up"
                   >
@@ -194,8 +221,10 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
                       reorderElement(element.id, 'down');
                     }}
                     disabled={isBottom}
-                    className={`rounded-lg p-1.5 ${
-                      isBottom ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    className={`rounded-xl p-2 ${
+                      isBottom
+                        ? 'cursor-not-allowed text-slate-300'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
                     }`}
                     title="Move layer down"
                   >
@@ -207,8 +236,10 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
                       reorderElement(element.id, 'top');
                     }}
                     disabled={isTop}
-                    className={`rounded-lg p-1.5 ${
-                      isTop ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    className={`rounded-xl p-2 ${
+                      isTop
+                        ? 'cursor-not-allowed text-slate-300'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
                     }`}
                     title="Bring to front"
                   >
@@ -220,8 +251,10 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
                       reorderElement(element.id, 'bottom');
                     }}
                     disabled={isBottom}
-                    className={`rounded-lg p-1.5 ${
-                      isBottom ? 'cursor-not-allowed text-slate-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    className={`rounded-xl p-2 ${
+                      isBottom
+                        ? 'cursor-not-allowed text-slate-300'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
                     }`}
                     title="Send to back"
                   >
@@ -234,7 +267,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
                         removeElement(element.id);
                       }
                     }}
-                    className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
+                    className="rounded-xl p-2 text-red-600 transition-colors hover:bg-red-50"
                     title="Delete layer"
                   >
                     <Trash2 className="mx-auto h-3.5 w-3.5" />
@@ -247,7 +280,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
       </div>
 
       {elements.length > 0 && (
-        <div className="mt-4 flex-shrink-0 rounded-2xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+        <div className="mt-3 flex-shrink-0 rounded-2xl bg-slate-50 px-2.5 py-2 text-[10px] text-slate-500">
           Top entries render in front. Use the controls to reorder the creative.
         </div>
       )}

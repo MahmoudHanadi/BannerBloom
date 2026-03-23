@@ -13,6 +13,7 @@ interface BannerRendererProps {
   isMaster?: boolean;
   category: 'square' | 'horizontal' | 'vertical';
   customScale?: number;
+  interactionScale?: number;
   isExport?: boolean;
   suppressButtonText?: boolean;
 }
@@ -26,6 +27,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   isMaster,
   category,
   customScale,
+  interactionScale = 1,
   isExport,
   suppressButtonText,
 }) => {
@@ -121,8 +123,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const centerX = rect.left + layout.pixelX + layout.pixelW / 2;
-    const centerY = rect.top + layout.pixelY + layout.pixelH / 2;
+    const centerX = rect.left + (layout.pixelX + layout.pixelW / 2) * interactionScale;
+    const centerY = rect.top + (layout.pixelY + layout.pixelH / 2) * interactionScale;
 
     const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
     setRotateStart({ angle: layout.rotation, startAngle });
@@ -139,8 +141,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       const currentLayout = calculateElementLayout(element, overrides, width, height, category, scale, masterHeight);
 
       if (isDragging) {
-        const deltaX = e.clientX - dragStart.x;
-        const deltaY = e.clientY - dragStart.y;
+        const deltaX = (e.clientX - dragStart.x) / interactionScale;
+        const deltaY = (e.clientY - dragStart.y) / interactionScale;
 
         const deltaXPercent = (deltaX / displayWidth) * 100;
         const deltaYPercent = (deltaY / displayHeight) * 100;
@@ -150,8 +152,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
           y: dragStart.initialY + deltaYPercent  // Use dragStart.initialY for base
         });
       } else if (isResizing) {
-        const deltaX = e.clientX - resizeStart.x;
-        const deltaY = e.clientY - resizeStart.y;
+        const deltaX = (e.clientX - resizeStart.x) / interactionScale;
+        const deltaY = (e.clientY - resizeStart.y) / interactionScale;
 
         const deltaXPercent = (deltaX / displayWidth) * 100;
         const deltaYPercent = (deltaY / displayHeight) * 100;
@@ -214,7 +216,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
 
 
             // Calculate absolute total delta from start
-            const totalDeltaY = e.clientY - resizeStart.y;
+            const totalDeltaY = (e.clientY - resizeStart.y) / interactionScale;
 
             // Calculate initial pixel height based on the font size relation
             // We know: currentH ~ currentFontSize. layout.pixelH is current visual height.
@@ -299,8 +301,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         if (!rect) return;
 
         const layout = calculateElementLayout(element, overrides, width, height, category, scale, masterHeight);
-        const centerX = rect.left + layout.pixelX + layout.pixelW / 2;
-        const centerY = rect.top + layout.pixelY + layout.pixelH / 2;
+        const centerX = rect.left + (layout.pixelX + layout.pixelW / 2) * interactionScale;
+        const centerY = rect.top + (layout.pixelY + layout.pixelH / 2) * interactionScale;
 
         const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
         const angleDiff = currentAngle - rotateStart.startAngle;
@@ -324,7 +326,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isResizing, isRotating, dragStart, resizeStart, rotateStart, selectedElementId, bannerId, displayWidth, displayHeight, elements, overrides, setOverride, width, height, category, scale, masterHeight]);
+  }, [isDragging, isResizing, isRotating, dragStart, resizeStart, rotateStart, selectedElementId, bannerId, displayWidth, displayHeight, elements, overrides, setOverride, width, height, category, scale, masterHeight, interactionScale]);
 
 
 
