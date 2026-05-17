@@ -3,11 +3,14 @@ import { useBannerStore } from '../store/bannerStore';
 import { BannerRenderer } from './BannerRenderer';
 import { calculateElementLayout } from '../utils/layoutUtils';
 import { getCategoryMasterSize } from '../config/bannerPresets';
+import {
+  BANNERBLOOM_CLIPBOARD_TEXT_MARKER,
+  isBannerBloomClipboardMarker,
+} from '../lib/editorClipboard';
 
 const MIN_WORKSPACE_ZOOM = 0.2;
 const MAX_WORKSPACE_ZOOM = 2.5;
 const FIT_PADDING = 56;
-const MIN_CLEAR_TEXT_ZOOM = 0.9;
 
 type WorkspacePoint = {
   x: number;
@@ -20,6 +23,13 @@ type WorkspaceSize = {
 };
 
 type WorkspaceBounds = WorkspacePoint & WorkspaceSize;
+
+const categoryLabels = {
+  square: 'Square formats (1:1)',
+  horizontal: 'Landscape formats',
+  'wide-horizontal': 'Wide landscape formats',
+  vertical: 'Vertical formats',
+} as const;
 
 const clampZoom = (zoom: number) =>
   Math.min(MAX_WORKSPACE_ZOOM, Math.max(MIN_WORKSPACE_ZOOM, zoom));
@@ -46,6 +56,9 @@ export const CanvasArea: React.FC = () => {
   const selectedBannerId = useBannerStore((state) => state.selectedBannerId);
   const addElement = useBannerStore((state) => state.addElement);
   const addImageElementFromBlob = useBannerStore((state) => state.addImageElementFromBlob);
+  const copySelectedElementToClipboard = useBannerStore((state) => state.copySelectedElementToClipboard);
+  const pasteElementFromClipboard = useBannerStore((state) => state.pasteElementFromClipboard);
+  const selectBanner = useBannerStore((state) => state.selectBanner);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
 
   const [isSpacePressed, setIsSpacePressed] = React.useState(false);
@@ -65,11 +78,43 @@ export const CanvasArea: React.FC = () => {
   } | null>(null);
   const hasInitializedViewRef = React.useRef(false);
 
-  const squareBanners = bannerSizes.filter((banner) => banner.category === 'square');
-  const horizontalBanners = bannerSizes.filter((banner) => banner.category === 'horizontal');
-  const verticalBanners = bannerSizes.filter((banner) => banner.category === 'vertical');
+  const preferredBannerId = React.useMemo(
+    () =>
+      bannerSizes.find((banner) => banner.isMaster && banner.category === 'square')?.id ??
+      bannerSizes.find((banner) => banner.isMaster)?.id ??
+      bannerSizes[0]?.id ??
+      null,
+    [bannerSizes],
+  );
+
+  React.useEffect(() => {
+    if (!selectedBannerId && preferredBannerId) {
+      selectBanner(preferredBannerId);
+    }
+  }, [preferredBannerId, selectBanner, selectedBannerId]);
+
+  const groupedBanners = React.useMemo(
+    () =>
+      (Object.keys(categoryLabels) as Array<keyof typeof categoryLabels>)
+        .map((category) => ({
+          category,
+          label: categoryLabels[category],
+          banners: bannerSizes
+            .filter((banner) => banner.category === category)
+            .sort((left, right) => {
+              if (Boolean(left.isMaster) !== Boolean(right.isMaster)) {
+                return left.isMaster ? -1 : 1;
+              }
+
+              return left.width * left.height - right.width * right.height;
+            }),
+        }))
+        .filter((group) => group.banners.length > 0),
+    [bannerSizes],
+  );
+
   const isolatedBanner = isolatedBannerId
-    ? bannerSizes.find((banner) => banner.id === isolatedBannerId)
+    ? bannerSizes.find((banner) => banner.id === isolatedBannerId) ?? null
     : null;
 
   const applyZoomAtPoint = React.useCallback(
@@ -171,9 +216,7 @@ export const CanvasArea: React.FC = () => {
         return;
       }
 
-      const target = workspaceRef.current.querySelector<HTMLElement>(
-        `[data-banner-id="${bannerId}"]`,
-      );
+      const target = workspaceRef.current.querySelector<HTMLElement>(`[data-banner-id="${bannerId}"]`);
 
       if (!target) {
         return;
@@ -254,7 +297,7 @@ export const CanvasArea: React.FC = () => {
       1,
     );
 
-    if (initialZoom !== null && initialZoom >= MIN_CLEAR_TEXT_ZOOM) {
+    if (initialZoom !== null) {
       fitAll();
     } else {
       centerWorkspace(1);
@@ -297,7 +340,7 @@ export const CanvasArea: React.FC = () => {
               state.overrides[banner.id],
               banner.width,
               banner.height,
-              banner.category as 'square' | 'horizontal' | 'vertical',
+              banner.category,
               1,
               getCategoryMasterSize(state.bannerSizes, banner.category)?.height ?? banner.height,
             );
@@ -336,6 +379,31 @@ export const CanvasArea: React.FC = () => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'h' && !isEditableTarget(event.target)) {
         event.preventDefault();
         setShowGallery(true);
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
+        if (isEditableTarget(event.target)) {
+          return;
+        }
+
+        const state = useBannerStore.getState();
+        if (!state.selectedElementId) {
+          return;
+        }
+
+        event.preventDefault();
+        void (async () => {
+          const didCopy = await copySelectedElementToClipboard();
+          if (!didCopy || !navigator.clipboard?.writeText) {
+            return;
+          }
+
+          try {
+            await navigator.clipboard.writeText(BANNERBLOOM_CLIPBOARD_TEXT_MARKER);
+          } catch (error) {
+            console.warn('Failed to write BannerBloom clipboard marker.', error);
+          }
+        })();
       }
 
       if ((event.key === 'Backspace' || event.key === 'Delete') && selectedElementId) {
@@ -384,6 +452,13 @@ export const CanvasArea: React.FC = () => {
     };
 
     const handlePaste = (event: ClipboardEvent) => {
+      const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
+      if (isBannerBloomClipboardMarker(clipboardText)) {
+        event.preventDefault();
+        void pasteElementFromClipboard();
+        return;
+      }
+
       const items = event.clipboardData?.items;
       if (!items) return;
 
@@ -395,9 +470,8 @@ export const CanvasArea: React.FC = () => {
         }
       }
 
-      const text = event.clipboardData?.getData('text/plain');
-      if (text && !isEditableTarget(event.target)) {
-        addElement('text', text);
+      if (clipboardText && !isEditableTarget(event.target)) {
+        addElement('text', clipboardText);
       }
     };
 
@@ -415,8 +489,10 @@ export const CanvasArea: React.FC = () => {
     addImageElementFromBlob,
     adjustZoomFromCenter,
     centerWorkspace,
+    copySelectedElementToClipboard,
     fitAll,
     focusBanner,
+    pasteElementFromClipboard,
     removeElement,
     selectedBannerId,
     selectedElementId,
@@ -496,10 +572,12 @@ export const CanvasArea: React.FC = () => {
 
   const renderBannerColumn = (banners: typeof bannerSizes, title: string) => (
     <div className="studio-banner-column flex flex-col gap-6 pt-1">
-      <h3 className="studio-banner-column-title text-[1.05rem] font-extrabold text-slate-900">{title}</h3>
+      <h3 className="studio-banner-column-title text-[1.05rem] font-extrabold text-slate-900">
+        {title}
+      </h3>
       {banners.map((size) => (
         <div key={size.id} className="studio-banner-card flex flex-col gap-3">
-          <div className="studio-banner-meta">
+          <div className="studio-banner-meta flex flex-wrap items-center gap-2">
             <span className="text-[0.95rem] font-bold text-slate-800">{size.name}</span>
             {size.isMaster && (
               <span className="studio-pill studio-badge-master px-2.5 py-1 text-[0.72rem]">
@@ -509,6 +587,11 @@ export const CanvasArea: React.FC = () => {
             <span className="studio-pill studio-badge-size px-2.5 py-1 text-[0.72rem]">
               {size.width} x {size.height}
             </span>
+            {size.notes && (
+              <span className="studio-pill px-2.5 py-1 text-[0.68rem] text-slate-500">
+                {size.notes}
+              </span>
+            )}
           </div>
           <div className="studio-banner-frame w-fit p-4" data-banner-id={size.id}>
             <BannerRenderer
@@ -519,6 +602,7 @@ export const CanvasArea: React.FC = () => {
               overrides={overrides[size.id]}
               isMaster={size.isMaster}
               category={size.category}
+              customScale={1}
               interactionScale={workspaceZoom}
             />
           </div>
@@ -530,7 +614,9 @@ export const CanvasArea: React.FC = () => {
   return (
     <div
       ref={viewportRef}
-      className={`studio-canvas-scroll studio-canvas-viewport relative flex-1 overflow-hidden ${isPanning ? 'cursor-grabbing' : isSpacePressed ? 'cursor-grab' : ''}`}
+      className={`studio-canvas-scroll studio-canvas-viewport relative flex-1 overflow-hidden ${
+        isPanning ? 'cursor-grabbing' : isSpacePressed ? 'cursor-grab' : ''
+      }`}
       onMouseDownCapture={handleViewportMouseDownCapture}
       onWheel={handleViewportWheel}
     >
@@ -588,7 +674,7 @@ export const CanvasArea: React.FC = () => {
       </div>
 
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-white/60 bg-white/82 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-        Space + drag to pan / Ctrl-Cmd + wheel to zoom / 0 fits all
+        Space + drag to pan / Ctrl-Cmd + wheel to zoom / 0 fits all / Ctrl+C copies
       </div>
 
       <div
@@ -600,11 +686,9 @@ export const CanvasArea: React.FC = () => {
       >
         <div
           className={`studio-canvas-grid pt-4 ${isSpacePressed ? 'pointer-events-none' : ''}`}
-          style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
+          style={{ gridTemplateColumns: `repeat(${groupedBanners.length}, minmax(0, 1fr))` }}
         >
-          {renderBannerColumn(squareBanners, 'Square formats (1:1)')}
-          {renderBannerColumn(horizontalBanners, 'Landscape formats')}
-          {renderBannerColumn(verticalBanners, 'Vertical formats')}
+          {groupedBanners.map((group) => renderBannerColumn(group.banners, group.label))}
         </div>
       </div>
     </div>

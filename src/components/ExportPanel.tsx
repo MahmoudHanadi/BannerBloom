@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, Download, Info, Loader2 } from 'lucide-react';
 import { getBannerPreset } from '../config/bannerPresets';
 import {
-  isSizeLimitIssue,
   validateExportSelection,
   validateGeneratedArtifact,
 } from '../lib/export/bannerValidation';
@@ -32,10 +31,8 @@ const downloadBlob = (blob: Blob, filename: string) => {
   }, 0);
 };
 
-const hasBlockingErrors = (issues: ExportValidationIssue[], allowSizeLimitBypass = false) =>
-  issues.some(
-    (issue) => issue.level === 'error' && (!allowSizeLimitBypass || !isSizeLimitIssue(issue)),
-  );
+const hasBlockingErrors = (issues: ExportValidationIssue[]) =>
+  issues.some((issue) => issue.level === 'error');
 
 const isDynamicImportFailure = (message: string) =>
   message.includes('Failed to fetch dynamically imported module') ||
@@ -56,9 +53,23 @@ export const ExportPanel: React.FC = () => {
   const [selectedBanners, setSelectedBanners] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<ExportType | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true;
+    }
+
+    const saved = window.localStorage.getItem('bannerbloom-export-collapsed');
+    return saved === null ? true : saved === 'true';
+  });
   const [validationIssues, setValidationIssues] = useState<ExportValidationIssue[]>([]);
-  const [ignoreSizeLimits, setIgnoreSizeLimits] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem('bannerbloom-export-collapsed', String(isCollapsed));
+  }, [isCollapsed]);
 
   const toggleBannerSelection = (bannerId: string) => {
     setSelectedBanners((previous) => {
@@ -106,6 +117,7 @@ export const ExportPanel: React.FC = () => {
       );
       const renderedBanners = await renderSelectedBanners({
         banners: bannersToExport,
+        bannerSizes,
         elements,
         overrideMap: overrides,
         projectName,
@@ -123,7 +135,7 @@ export const ExportPanel: React.FC = () => {
       const nextIssues = [...preflightIssues, ...generatedIssues];
       setValidationIssues(nextIssues);
 
-      if (hasBlockingErrors(generatedIssues, ignoreSizeLimits)) {
+      if (hasBlockingErrors(generatedIssues)) {
         return;
       }
 
@@ -257,29 +269,13 @@ export const ExportPanel: React.FC = () => {
               <span>{preset.description}</span>
             </div>
               <p className="mt-2 text-xs text-slate-500">
-                Supported outputs: {preset.supportedExportTypes.map((type) => type.toUpperCase()).join(', ')}. All canvases in this preset, including source sizes, can be exported.
+                Supported outputs: {preset.supportedExportTypes.map((type) => type.toUpperCase()).join(', ')}. All placements in this pack, including source sizes, can be exported.
                </p>
              </div>
 
           {validationIssues.length > 0 && (
             <div className="space-y-2">{validationIssues.map(renderValidationIssue)}</div>
           )}
-
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <input
-              type="checkbox"
-              checked={ignoreSizeLimits}
-              onChange={(event) => setIgnoreSizeLimits(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-            />
-            <div className="space-y-1">
-              <span className="block font-semibold">Ignore size limits and download anyway</span>
-              <span className="block text-xs text-amber-800">
-                This only bypasses generated file size errors. Unsupported presets and runtime
-                failures still block export.
-              </span>
-            </div>
-          </label>
 
           <div className="studio-export-grid grid max-h-48 grid-cols-1 gap-3 overflow-y-auto pr-2 custom-scrollbar">
             {availableBanners.map((banner) => (

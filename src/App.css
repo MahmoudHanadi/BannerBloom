@@ -165,6 +165,14 @@ textarea {
   container-name: inspector;
 }
 
+.studio-properties-panel.studio-properties-panel-collapsed {
+  flex: 0 0 var(--studio-collapsed-rail-width);
+  width: var(--studio-collapsed-rail-width);
+  min-width: var(--studio-collapsed-rail-width);
+  container-type: normal;
+  container-name: none;
+}
+
 .studio-sidebar-scroll,
 .studio-properties-panel {
   scrollbar-gutter: stable;

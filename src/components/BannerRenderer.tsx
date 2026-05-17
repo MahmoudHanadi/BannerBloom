@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { BannerElement, Override } from '../store/bannerStore';
+import type { BannerCategory, BannerElement, Override } from '../store/bannerStore';
 import { useBannerStore } from '../store/bannerStore';
 import { calculateElementLayout } from '../utils/layoutUtils';
 import { getCategoryMasterSize } from '../config/bannerPresets';
@@ -11,11 +11,12 @@ interface BannerRendererProps {
   elements: BannerElement[];
   overrides?: Record<string, Override>;
   isMaster?: boolean;
-  category: 'square' | 'horizontal' | 'vertical';
+  category: BannerCategory;
   customScale?: number;
   interactionScale?: number;
   isExport?: boolean;
   suppressButtonText?: boolean;
+  isInteractive?: boolean;
 }
 
 export const BannerRenderer: React.FC<BannerRendererProps> = ({
@@ -30,6 +31,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   interactionScale = 1,
   isExport,
   suppressButtonText,
+  isInteractive = true,
 }) => {
   const selectElement = useBannerStore((state) => state.selectElement);
   const selectBanner = useBannerStore((state) => state.selectBanner);
@@ -61,6 +63,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const masterHeight = getCategoryMasterSize(bannerSizes, category)?.height ?? height;
 
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
+    if (!isInteractive) return;
     e.preventDefault();
     e.stopPropagation();
     selectElement(elementId);
@@ -77,6 +80,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   };
 
   const handleResizeStart = (e: React.MouseEvent, handle: string, elementId: string) => {
+    if (!isInteractive) return;
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
@@ -112,6 +116,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   };
 
   const handleRotateStart = (e: React.MouseEvent, elementId: string) => {
+    if (!isInteractive) return;
     e.preventDefault();
     e.stopPropagation();
     setIsRotating(true);
@@ -364,8 +369,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   };
 
   const selectedBannerId = useBannerStore((state) => state.selectedBannerId);
-  const isSelected = selectedBannerId === bannerId;
-  const isIsolated = isolatedBannerId === bannerId;
+  const isSelected = isInteractive && selectedBannerId === bannerId;
+  const isIsolated = isInteractive && isolatedBannerId === bannerId;
   const containerClassName =
     !isExport && isIsolated
       ? 'ring-4 ring-emerald-200'
@@ -375,6 +380,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
 
   // Handle triple-click to toggle isolated mode
   const handleBannerClick = () => {
+    if (!isInteractive) return;
     selectElement(null);
     selectBanner(bannerId);
 
@@ -442,7 +448,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
         boxShadow: !isExport ? '0 14px 30px rgba(15, 23, 42, 0.12)' : undefined,
       }}
       className={containerClassName}
-      onClick={handleBannerClick}
+      onClick={isInteractive ? handleBannerClick : undefined}
     >
       {/* Isolated Mode Indicator */}
       {isIsolated && !isExport && (
@@ -456,7 +462,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
 
       {elements.map((el, index) => {
         const layout = calculateElementLayout(el, overrides, width, height, category, scale, masterHeight);
-        const isElSelected = el.id === selectedElementId && !isExport;
+        const isElSelected = el.id === selectedElementId && !isExport && isInteractive;
         const buttonPaddingY = Math.max(2, 4 * scale);
         const buttonPaddingX = Math.max(4, 8 * scale);
         // Fix Layer Order: Use array index for z-index when not selected, so DOM order (layer order) is respected.
@@ -468,8 +474,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
           <React.Fragment key={el.id}>
             {/* Content Layer */}
             <div
-              onMouseDown={(e) => handleMouseDown(e, el.id)}
-              onClick={(e) => e.stopPropagation()}
+              onMouseDown={isInteractive ? (e) => handleMouseDown(e, el.id) : undefined}
+              onClick={isInteractive ? (e) => e.stopPropagation() : undefined}
               style={{
                 position: 'absolute',
                 left: layout.pixelX,

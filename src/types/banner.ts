@@ -1,17 +1,20 @@
 import type React from 'react';
 
 export type ElementType = 'text' | 'image' | 'shape' | 'button';
-export type BannerCategory = 'square' | 'horizontal' | 'vertical';
+export type BannerCategory = 'square' | 'horizontal' | 'wide-horizontal' | 'vertical';
 export type ExportType = 'png' | 'html5' | 'amp';
 export type BannerPresetId =
   | 'google-ads-upload'
   | 'google-responsive-display'
-  | 'meta-social';
+  | 'meta-social'
+  | 'web-app-global';
 
 export interface BannerElement {
   id: string;
   type: ElementType;
   content: string;
+  slotKey?: string;
+  slotLabel?: string;
   x: number;
   y: number;
   width: number;
@@ -119,6 +122,7 @@ export interface ProjectSummary {
   thumbnail?: string;
   bannerPresetId: BannerPresetId;
   elementCount?: number;
+  templateId?: string | null;
 }
 
 export interface SavedProject extends ProjectSummary {
@@ -128,6 +132,23 @@ export interface SavedProject extends ProjectSummary {
   background: BackgroundConfig;
   logo: LogoConfig | null;
   cta: CTAConfig | null;
+}
+
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  lastModified: number;
+  thumbnail?: string;
+  elementCount?: number;
+  bannerPresetId: BannerPresetId;
+}
+
+export interface TemplateRecord extends TemplateSummary {
+  version: '1.0';
+  elements: BannerElement[];
+  overrides: Record<string, Record<string, Override>>;
+  bannerSizes: BannerSize[];
+  background: BackgroundConfig;
 }
 
 export interface EditorAsset {
@@ -146,7 +167,7 @@ export interface BannerPreset {
   description: string;
   bannerSizes: BannerSize[];
   supportedExportTypes: ExportType[];
-  validationProfile: 'google-upload' | 'google-responsive-display' | 'meta-social';
+  validationProfile: 'google-upload' | 'google-responsive-display' | 'meta-social' | 'web-app-global';
 }
 
 export type ExportValidationIssueCode =

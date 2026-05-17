@@ -47,11 +47,11 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onEnterLibrary }) 
               id="bannerbloom-launch-title"
               className="mt-8 max-w-3xl text-4xl font-black tracking-[-0.04em] text-slate-950 md:text-5xl"
             >
-              Start in the library, then open the campaign that matters.
+              Build banners fast, then reuse the layouts that work.
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-              Welcome to BannerBloom. Browse saved campaigns, organize folders, or create a
-              fresh campaign before you enter the editor.
+              Welcome to BannerBloom. Open a campaign, create one from scratch, or start from a
+              saved layout template when you need fast variations.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -104,9 +104,9 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onEnterLibrary }) 
               <div className="studio-launch-step">
                 <span className="studio-launch-step__index">2</span>
                 <div>
-                  <div className="font-semibold text-slate-900">Pick or create a campaign</div>
+                  <div className="font-semibold text-slate-900">Start blank or from a saved template</div>
                   <div className="text-sm text-slate-500">
-                    Start from a saved campaign or create a new one with a clear name.
+                    Reuse saved layout work whenever you want to swap assets or text quickly.
                   </div>
                 </div>
               </div>

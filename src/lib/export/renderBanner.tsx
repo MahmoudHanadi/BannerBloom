@@ -4,7 +4,6 @@ import type { BannerElement, BannerSize, Override } from '../../types/banner';
 import { BannerRenderer } from '../../components/BannerRenderer';
 import { getCategoryMasterSize } from '../../config/bannerPresets';
 import { getBannerImageFilename } from '../fileNaming';
-import { useBannerStore } from '../../store/bannerStore';
 import { calculateElementLayout } from '../../utils/layoutUtils';
 import type { RenderedBannerAsset } from './types';
 
@@ -139,11 +138,13 @@ const wrapButtonText = (
 const drawButtonTextOverlay = ({
   canvas,
   banner,
+  bannerSizes,
   elements,
   overrides,
 }: {
   canvas: HTMLCanvasElement;
   banner: BannerSize;
+  bannerSizes: BannerSize[];
   elements: BannerElement[];
   overrides?: Record<string, Override>;
 }) => {
@@ -152,7 +153,6 @@ const drawButtonTextOverlay = ({
     return;
   }
 
-  const bannerSizes = useBannerStore.getState().bannerSizes;
   const masterHeight = getCategoryMasterSize(bannerSizes, banner.category)?.height ?? banner.height;
   const buttonElements = elements.filter((element) => element.type === 'button');
 
@@ -275,11 +275,13 @@ const createExportFrame = (banner: BannerSize) => {
 
 const captureOffscreenBanner = async ({
   banner,
+  bannerSizes,
   elements,
   overrides,
   projectName,
 }: {
   banner: BannerSize;
+  bannerSizes: BannerSize[];
   elements: BannerElement[];
   overrides?: Record<string, Override>;
   projectName: string;
@@ -323,7 +325,7 @@ const captureOffscreenBanner = async ({
       windowWidth: banner.width,
       windowHeight: banner.height,
     });
-    drawButtonTextOverlay({ canvas, banner, elements, overrides });
+    drawButtonTextOverlay({ canvas, banner, bannerSizes, elements, overrides });
 
     const blob = await canvasToBlob(canvas, banner.name);
     return {
@@ -341,11 +343,13 @@ const captureOffscreenBanner = async ({
 
 export const renderBannerToBlob = async ({
   banner,
+  bannerSizes,
   elements,
   overrides,
   projectName,
 }: {
   banner: BannerSize;
+  bannerSizes: BannerSize[];
   elements: BannerElement[];
   overrides?: Record<string, Override>;
   projectName: string;
@@ -357,5 +361,5 @@ export const renderBannerToBlob = async ({
   await nextFrame();
 
   // Export from a controlled off-screen render to avoid editor UI styles and Tailwind OKLCH colors.
-  return captureOffscreenBanner({ banner, elements, overrides, projectName });
+  return captureOffscreenBanner({ banner, bannerSizes, elements, overrides, projectName });
 };

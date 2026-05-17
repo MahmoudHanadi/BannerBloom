@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
   const getAllProjects = useBannerStore((state) => state.getAllProjects);
   const showGallery = useBannerStore((state) => state.showGallery);
   const elementsCount = useBannerStore((state) => state.elements.length);
+  const currentTemplateId = useBannerStore((state) => state.currentTemplateId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
@@ -132,17 +133,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
             className="studio-sidebar-section-toggle"
             aria-expanded={openSections.target}
           >
-              {openSections.target ? (
-                <div>
-                  <div className="studio-section-label !mb-1">Targets</div>
-                  <h2 className="text-lg font-bold text-slate-900">Deployment targets</h2>
-                </div>
-              ) : (
-                <div className="studio-sidebar-section-summary">
-                  <span className="studio-sidebar-section-kicker">Targets</span>
-                  <span className="studio-sidebar-section-title">Deployment targets</span>
-                </div>
-              )}
+            {openSections.target ? (
+              <div>
+                <div className="studio-section-label !mb-1">Targets</div>
+                <h2 className="text-lg font-bold text-slate-900">Deployment targets</h2>
+              </div>
+            ) : (
+              <div className="studio-sidebar-section-summary">
+                <span className="studio-sidebar-section-kicker">Targets</span>
+                <span className="studio-sidebar-section-title">Deployment targets</span>
+              </div>
+            )}
             <span className="studio-sidebar-section-toggle-meta">
               <span className="studio-pill studio-pill-primary">
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -190,6 +191,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                 </select>
               </div>
               <p className="studio-target-description">{currentPreset.description}</p>
+              {currentTemplateId && (
+                <p className="mt-2 text-xs font-medium text-emerald-700">
+                  This campaign started from a saved template.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -272,22 +278,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
             className="studio-sidebar-section-toggle"
             aria-expanded={openSections.elements}
           >
-              {openSections.elements ? (
-                <div>
-                  <div className="studio-section-label !mb-1">Elements</div>
-                  <h3 className="text-base font-bold text-slate-900">Add elements</h3>
-                </div>
-              ) : (
-                <div className="studio-sidebar-section-summary">
-                  <span className="studio-sidebar-section-kicker">Elements</span>
-                  <span className="studio-sidebar-section-title">Add elements</span>
-                </div>
+            {openSections.elements ? (
+              <div>
+                <div className="studio-section-label !mb-1">Elements</div>
+                <h3 className="text-base font-bold text-slate-900">Add elements</h3>
+              </div>
+            ) : (
+              <div className="studio-sidebar-section-summary">
+                <span className="studio-sidebar-section-kicker">Elements</span>
+                <span className="studio-sidebar-section-title">Add elements</span>
+              </div>
+            )}
+            <span className="studio-sidebar-section-toggle-meta">
+              {openSections.elements && (
+                <span className="studio-pill studio-pill-neutral">Text & images</span>
               )}
-              <span className="studio-sidebar-section-toggle-meta">
-                {openSections.elements && <span className="studio-pill studio-pill-neutral">Text & images</span>}
-                {openSections.elements ? (
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                ) : (
+              {openSections.elements ? (
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              ) : (
                 <ChevronRight className="h-4 w-4 text-slate-400" />
               )}
             </span>
@@ -312,7 +320,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                   </span>
                   <span className="studio-tool-copy">
                     <span className="studio-tool-title">Add text</span>
-                    <span className="studio-tool-subtitle">Headlines, labels, or product copy.</span>
+                    <span className="studio-tool-subtitle">
+                      Headlines, labels, or product copy.
+                    </span>
                   </span>
                 </button>
                 <button
@@ -324,13 +334,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                   </span>
                   <span className="studio-tool-copy">
                     <span className="studio-tool-title">Upload image</span>
-                    <span className="studio-tool-subtitle">Place logos, products, or photography.</span>
+                    <span className="studio-tool-subtitle">
+                      Place logos, products, or photography.
+                    </span>
                   </span>
                 </button>
-                <button
-                  onClick={() => handleAddShape('rectangle')}
-                  className="studio-tool-button"
-                >
+                <button onClick={() => handleAddShape('rectangle')} className="studio-tool-button">
                   <span className="studio-tool-icon bg-slate-100 text-slate-700">
                     <Square className="h-4 w-4" />
                   </span>
@@ -339,10 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
                     <span className="studio-tool-subtitle">Hard-edged block.</span>
                   </span>
                 </button>
-                <button
-                  onClick={() => handleAddShape('circle')}
-                  className="studio-tool-button"
-                >
+                <button onClick={() => handleAddShape('circle')} className="studio-tool-button">
                   <span className="studio-tool-icon bg-teal-50 text-teal-700">
                     <Circle className="h-4 w-4" />
                   </span>
@@ -391,17 +397,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
             className="studio-sidebar-section-toggle"
             aria-expanded={openSections.layers}
           >
-              {openSections.layers ? (
-                <div>
-                  <div className="studio-section-label !mb-1">Layers</div>
-                  <h3 className="text-base font-bold text-slate-900">Layer stack</h3>
-                </div>
-              ) : (
-                <div className="studio-sidebar-section-summary">
-                  <span className="studio-sidebar-section-kicker">Layers</span>
-                  <span className="studio-sidebar-section-title">Layer stack</span>
-                </div>
-              )}
+            {openSections.layers ? (
+              <div>
+                <div className="studio-section-label !mb-1">Layers</div>
+                <h3 className="text-base font-bold text-slate-900">Layer stack</h3>
+              </div>
+            ) : (
+              <div className="studio-sidebar-section-summary">
+                <span className="studio-sidebar-section-kicker">Layers</span>
+                <span className="studio-sidebar-section-title">Layer stack</span>
+              </div>
+            )}
             <span className="studio-sidebar-section-toggle-meta">
               <span className="studio-pill studio-pill-neutral">{elementsCount}</span>
               {openSections.layers ? (

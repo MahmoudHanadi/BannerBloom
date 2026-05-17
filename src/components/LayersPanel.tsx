@@ -59,6 +59,13 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({ showHeader = true }) =
   };
 
   const getElementDisplay = (element: BannerElement) => {
+    if (element.slotLabel) {
+      return {
+        title: element.slotLabel,
+        subtitle: element.slotKey ? `Slot: ${element.slotKey}` : `Reusable ${element.type} slot.`,
+      };
+    }
+
     if (element.type === 'text') {
       const preview = element.content.trim();
 

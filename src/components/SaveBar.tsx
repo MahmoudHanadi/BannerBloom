@@ -12,8 +12,10 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   const projectName = useBannerStore((state) => state.projectName);
   const lastSaved = useBannerStore((state) => state.lastSaved);
   const currentProjectId = useBannerStore((state) => state.currentProjectId);
+  const currentTemplateId = useBannerStore((state) => state.currentTemplateId);
   const setProjectName = useBannerStore((state) => state.setProjectName);
   const saveCurrentProject = useBannerStore((state) => state.saveCurrentProject);
+  const saveCurrentAsTemplate = useBannerStore((state) => state.saveCurrentAsTemplate);
   const saveProject = useBannerStore((state) => state.saveProject);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
 
@@ -40,6 +42,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
   const overrides = useBannerStore((state) => state.overrides);
   const background = useBannerStore((state) => state.background);
   const bannerPresetId = useBannerStore((state) => state.bannerPresetId);
+  const currentTemplateRef = useBannerStore((state) => state.currentTemplateId);
 
   useEffect(() => {
     if (!hasTrackedChanges.current) {
@@ -61,7 +64,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
       clearTimeout(unsavedTimeout);
       clearTimeout(timeout);
     };
-  }, [elements, overrides, background, bannerPresetId, saveCurrentProject]);
+  }, [elements, overrides, background, bannerPresetId, currentTemplateRef, saveCurrentProject]);
 
   useEffect(() => {
     const updateLastSavedLabel = () => {
@@ -105,6 +108,20 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
     setSaveStatus('saving');
     saveCurrentProject();
     setTimeout(() => setSaveStatus('saved'), 500);
+  };
+
+  const handleSaveTemplateClick = () => {
+    const suggestedName = `${projectName} Template`;
+    const templateName = window.prompt(
+      currentTemplateId ? 'Update template name' : 'Save current layout as template',
+      suggestedName,
+    );
+
+    if (!templateName?.trim()) {
+      return;
+    }
+
+    void saveCurrentAsTemplate(templateName.trim());
   };
 
   const handleNameSubmit = () => {
@@ -239,6 +256,15 @@ export const SaveBar: React.FC<SaveBarProps> = ({ isCollapsed, onToggleCollapse 
         >
           <Save className="h-4 w-4" />
           Save
+        </button>
+
+        <button
+          onClick={handleSaveTemplateClick}
+          className="studio-button-secondary flex items-center gap-2 px-4 py-2.5"
+          title="Save the current layout as a reusable template"
+        >
+          <LayoutGrid className="h-4 w-4" />
+          {currentTemplateId ? 'Update template' : 'Save layout template'}
         </button>
 
         <button

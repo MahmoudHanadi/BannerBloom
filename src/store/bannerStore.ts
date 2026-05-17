@@ -13,6 +13,12 @@ import {
   revokeEditorAsset,
 } from '../lib/assetUtils';
 import {
+  readBannerElementClipboardPayload,
+  storeBannerElementClipboardPayload,
+  type BannerElementClipboardPayload,
+} from '../lib/editorClipboard';
+import { renderBannerToBlob } from '../lib/export/renderBanner';
+import {
   createDefaultBackground,
   createDefaultCTA,
   createDefaultElements,
@@ -24,19 +30,27 @@ import {
   createStoredAssetRef,
   deleteFolderRecord,
   deleteProjectRecord,
+  deleteTemplateRecord,
   duplicateProjectRecord,
+  duplicateTemplateRecord,
   getFallbackPresetId,
   getProjectAssetBlob,
   getProjectDocument,
+  getTemplateAssetBlob,
+  getTemplateDocument,
   isStoredAssetRef,
   listFolders,
   listProjects,
+  listTemplates,
   moveProjectRecord,
   renameFolderRecord,
   renameProjectRecord,
+  renameTemplateRecord,
   saveProjectDocument,
+  saveTemplateDocument,
   type ProjectAssetRecord,
   type StoredProjectDocument,
+  type StoredTemplateDocument,
 } from '../lib/projectStorage';
 import { getBackupFilename } from '../lib/fileNaming';
 import type {
@@ -52,6 +66,8 @@ import type {
   Override,
   ProjectSummary,
   SavedProject,
+  TemplateRecord,
+  TemplateSummary,
 } from '../types/banner';
 
 export type {
@@ -73,6 +89,8 @@ export type {
   Override,
   ProjectSummary,
   SavedProject,
+  TemplateRecord,
+  TemplateSummary,
 } from '../types/banner';
 
 interface PortableProjectAsset {
@@ -86,6 +104,7 @@ interface PortableProjectFile {
   version: '2.0';
   projectName: string;
   bannerPresetId: BannerPresetId;
+  templateId?: string | null;
   lastSaved: number;
   elements: Array<Omit<BannerElement, 'content'> & { content: string | { kind: 'project-asset'; assetId: string } }>;
   overrides: Record<string, Record<string, Override>>;
@@ -109,6 +128,7 @@ interface BannerState {
   cta: CTAConfig | null;
   projectName: string;
   currentProjectId: string | null;
+  currentTemplateId: string | null;
   currentFolderId: string | null;
   lastSaved: number | null;
   showGallery: boolean;
@@ -120,10 +140,13 @@ interface BannerState {
     dimensions?: { width: number; height: number },
   ) => void;
   addImageElementFromBlob: (blob: Blob, name?: string) => Promise<void>;
+  replaceImageElementFromBlob: (elementId: string, blob: Blob, name?: string) => Promise<void>;
   setBackgroundImageFromBlob: (blob: Blob, name?: string) => Promise<void>;
   setLogoFromBlob: (blob: Blob, name?: string) => Promise<void>;
   updateElement: (id: string, updates: Partial<BannerElement>) => void;
   setOverride: (bannerId: string, elementId: string, override: Override) => void;
+  clearElementOverride: (bannerId: string, elementId: string) => void;
+  createSizeException: (bannerId: string, elementId: string) => void;
   selectElement: (id: string | null) => void;
   selectBanner: (id: string | null) => void;
   removeElement: (id: string) => void;
@@ -139,20 +162,38 @@ interface BannerState {
   setShowGallery: (show: boolean) => void;
   saveCurrentProject: () => Promise<void>;
   loadProjectById: (id: string) => Promise<void>;
-  createNewProject: (name: string, folderId?: string) => Promise<void>;
+  createNewProject: (
+    name: string,
+    folderId?: string,
+    bannerPresetId?: BannerPresetId,
+  ) => Promise<void>;
+  createProjectFromTemplate: (
+    name: string,
+    templateId: string,
+    folderId?: string,
+    bannerPresetId?: BannerPresetId,
+  ) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   duplicateProject: (id: string) => Promise<void>;
   renameProject: (id: string, newName: string) => Promise<void>;
   moveProjectToFolder: (projectId: string, folderId: string | null) => Promise<void>;
   getAllProjects: () => Promise<ProjectSummary[]>;
+  getAllTemplates: () => Promise<TemplateSummary[]>;
   getAllFolders: () => Promise<Folder[]>;
   createFolder: (name: string, color?: string) => Promise<void>;
   renameFolder: (id: string, newName: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  saveCurrentAsTemplate: (name: string) => Promise<void>;
+  duplicateTemplate: (id: string) => Promise<void>;
+  renameTemplate: (id: string, newName: string) => Promise<void>;
+  deleteTemplate: (id: string) => Promise<void>;
+  applyTemplateToCurrentProject: (templateId: string) => Promise<void>;
   saveToLocalStorage: () => Promise<void>;
   loadFromLocalStorage: () => Promise<boolean>;
   saveProject: () => Promise<void>;
   loadProject: (jsonString: string) => Promise<void>;
+  copySelectedElementToClipboard: () => Promise<boolean>;
+  pasteElementFromClipboard: () => Promise<boolean>;
 }
 
 const revokeAssets = (assets: EditorAsset[]) => {
@@ -329,12 +370,86 @@ const buildStoredAssetValue = async (
   return value;
 };
 
+const getProjectThumbnailBanner = (bannerSizes: BannerSize[]) =>
+  bannerSizes.find((banner) => banner.isMaster && banner.category === 'square') ??
+  bannerSizes.find((banner) => banner.isMaster) ??
+  bannerSizes[0];
+
+const loadImageFromBlob = (blob: Blob) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(blob);
+    const image = new Image();
+
+    const cleanup = () => {
+      URL.revokeObjectURL(imageUrl);
+    };
+
+    image.onload = () => {
+      cleanup();
+      resolve(image);
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error('Failed to decode project thumbnail.'));
+    };
+    image.src = imageUrl;
+  });
+
+const createThumbnailDataUrl = async (blob: Blob, maxDimension = 320) => {
+  const image = await loadImageFromBlob(blob);
+  const largestDimension = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = largestDimension > maxDimension ? maxDimension / largestDimension : 1;
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Failed to create thumbnail canvas.');
+  }
+
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  return canvas.toDataURL('image/jpeg', 0.88);
+};
+
+const generateProjectThumbnail = async (state: BannerState) => {
+  if (typeof document === 'undefined') {
+    return undefined;
+  }
+
+  const previewBanner = getProjectThumbnailBanner(state.bannerSizes);
+  if (!previewBanner) {
+    return undefined;
+  }
+
+  try {
+    const rendered = await renderBannerToBlob({
+      banner: previewBanner,
+      bannerSizes: state.bannerSizes,
+      elements: state.elements,
+      overrides: state.overrides[previewBanner.id],
+      projectName: state.projectName,
+    });
+
+    return await createThumbnailDataUrl(rendered.blob);
+  } catch (error) {
+    console.warn('Failed to generate project thumbnail:', error);
+    return undefined;
+  }
+};
+
 const serializeProject = async (state: BannerState, projectId: string): Promise<{
   document: StoredProjectDocument;
   assets: ProjectAssetRecord[];
 }> => {
   const assetRecords = new Map<string, ProjectAssetRecord>();
   const serializedElements = [];
+  const lastModified = Date.now();
 
   for (const element of state.elements) {
     const content =
@@ -358,16 +473,18 @@ const serializeProject = async (state: BannerState, projectId: string): Promise<
         image: await buildStoredAssetValue(state.logo.image, state.editorAssets, assetRecords),
       }
     : null;
+  const thumbnail = await generateProjectThumbnail(state);
 
   return {
     document: {
       version: '2.0',
       id: projectId,
       name: state.projectName,
-      lastModified: Date.now(),
+      lastModified,
       folderId: state.currentFolderId,
-      thumbnail: undefined,
+      thumbnail,
       bannerPresetId: state.bannerPresetId,
+      templateId: state.currentTemplateId,
       elements: serializedElements,
       overrides: state.overrides,
       bannerSizes: state.bannerSizes,
@@ -381,8 +498,9 @@ const serializeProject = async (state: BannerState, projectId: string): Promise<
 
 const resolveStoredValue = async (
   value: string | { kind: 'project-asset'; assetId: string },
-  projectId: string,
+  recordId: string,
   assets: EditorAsset[],
+  assetLoader: (recordId: string, assetId: string) => Promise<Blob | null>,
 ) => {
   if (typeof value === 'string') return value;
   if (!isStoredAssetRef(value)) return '';
@@ -390,7 +508,7 @@ const resolveStoredValue = async (
   const existing = assets.find((asset) => asset.id === value.assetId);
   if (existing) return existing.src;
 
-  const blob = await getProjectAssetBlob(projectId, value.assetId);
+  const blob = await assetLoader(recordId, value.assetId);
   if (!blob) return '';
 
   const asset = await createEditorAssetFromBlob(blob, { id: value.assetId });
@@ -406,7 +524,12 @@ const hydrateStoredProject = async (document: StoredProjectDocument): Promise<{
   const elements: BannerElement[] = [];
 
   for (const element of document.elements) {
-    const content = await resolveStoredValue(element.content, document.id, editorAssets);
+    const content = await resolveStoredValue(
+      element.content,
+      document.id,
+      editorAssets,
+      getProjectAssetBlob,
+    );
     elements.push({ ...element, content });
   }
 
@@ -414,7 +537,12 @@ const hydrateStoredProject = async (document: StoredProjectDocument): Promise<{
     document.background.type === 'image'
       ? {
           ...document.background,
-          value: await resolveStoredValue(document.background.value, document.id, editorAssets),
+          value: await resolveStoredValue(
+            document.background.value,
+            document.id,
+            editorAssets,
+            getProjectAssetBlob,
+          ),
         }
       : {
           ...document.background,
@@ -424,7 +552,12 @@ const hydrateStoredProject = async (document: StoredProjectDocument): Promise<{
   const logo = document.logo
     ? {
         ...document.logo,
-        image: await resolveStoredValue(document.logo.image, document.id, editorAssets),
+        image: await resolveStoredValue(
+          document.logo.image,
+          document.id,
+          editorAssets,
+          getProjectAssetBlob,
+        ),
       }
     : null;
 
@@ -436,12 +569,110 @@ const hydrateStoredProject = async (document: StoredProjectDocument): Promise<{
       folderId: document.folderId ?? null,
       thumbnail: document.thumbnail,
       bannerPresetId: document.bannerPresetId,
+      templateId: document.templateId ?? null,
       elements,
       overrides: document.overrides,
       bannerSizes: normalizeBannerSizesForPreset(document.bannerPresetId, document.bannerSizes),
       background,
       logo,
       cta: document.cta,
+    },
+    editorAssets,
+  };
+};
+
+const serializeTemplate = async (
+  state: BannerState,
+  templateId: string,
+  name: string,
+): Promise<{
+  document: StoredTemplateDocument;
+  assets: ProjectAssetRecord[];
+}> => {
+  const assetRecords = new Map<string, ProjectAssetRecord>();
+  const serializedElements = [];
+
+  for (const element of state.elements) {
+    const content =
+      element.type === 'image'
+        ? await buildStoredAssetValue(element.content, state.editorAssets, assetRecords)
+        : element.content;
+    serializedElements.push({ ...element, content });
+  }
+
+  const background: StoredTemplateDocument['background'] =
+    state.background.type === 'image'
+      ? {
+          ...state.background,
+          value: await buildStoredAssetValue(state.background.value, state.editorAssets, assetRecords),
+        }
+      : state.background;
+
+  return {
+    document: {
+      version: '1.0',
+      id: templateId,
+      name,
+      lastModified: Date.now(),
+      thumbnail: undefined,
+      elementCount: state.elements.length,
+      bannerPresetId: state.bannerPresetId,
+      elements: serializedElements,
+      overrides: state.overrides,
+      bannerSizes: state.bannerSizes,
+      background,
+    },
+    assets: [...assetRecords.values()],
+  };
+};
+
+const hydrateStoredTemplate = async (document: StoredTemplateDocument): Promise<{
+  template: TemplateRecord;
+  editorAssets: EditorAsset[];
+}> => {
+  const editorAssets: EditorAsset[] = [];
+  const elements: BannerElement[] = [];
+
+  for (const element of document.elements) {
+    const content = await resolveStoredValue(
+      element.content,
+      document.id,
+      editorAssets,
+      getTemplateAssetBlob,
+    );
+    elements.push({ ...element, content });
+  }
+
+  const background: BackgroundConfig =
+    document.background.type === 'image'
+      ? {
+          ...document.background,
+          value: await resolveStoredValue(
+            document.background.value,
+            document.id,
+            editorAssets,
+            getTemplateAssetBlob,
+          ),
+        }
+      : {
+          ...document.background,
+          value: document.background.value as string,
+        };
+
+  return {
+    template: {
+      id: document.id,
+      name: document.name,
+      lastModified: document.lastModified,
+      thumbnail: document.thumbnail,
+      elementCount: document.elementCount,
+      bannerPresetId:
+        document.bannerPresetId ?? getFallbackPresetId(document.outputPackHint ?? undefined),
+      version: '1.0',
+      elements,
+      overrides: document.overrides,
+      bannerSizes: document.bannerSizes,
+      background,
     },
     editorAssets,
   };
@@ -471,6 +702,7 @@ const buildPortableProject = async (state: BannerState): Promise<PortableProject
     version: '2.0',
     projectName: state.projectName,
     bannerPresetId: state.bannerPresetId,
+    templateId: state.currentTemplateId,
     lastSaved: Date.now(),
     elements: state.elements.map((element) => ({
       ...element,
@@ -499,6 +731,7 @@ const hydratePortableProject = async (
   cta: CTAConfig | null;
   editorAssets: EditorAsset[];
   projectName: string;
+  templateId: string | null;
   lastSaved: number | null;
 }> => {
   const editorAssets = await Promise.all(
@@ -563,11 +796,23 @@ const hydratePortableProject = async (
     cta: data.cta ?? null,
     editorAssets,
     projectName: data.projectName ?? 'Imported Campaign',
+    templateId: data.templateId ?? null,
     lastSaved: data.lastSaved ?? null,
   };
 };
 
 const getDefaultBannerSizes = () => getBannerSizesForPreset(defaultBannerPresetId);
+
+const getPreferredBannerId = (bannerSizes: BannerSize[]) =>
+  bannerSizes.find((banner) => banner.isMaster && banner.category === 'square')?.id ??
+  bannerSizes.find((banner) => banner.isMaster)?.id ??
+  bannerSizes[0]?.id ??
+  null;
+
+const CLIPBOARD_PASTE_OFFSET = 4;
+
+const clampElementPosition = (position: number, size: number) =>
+  Math.min(Math.max(position, 0), Math.max(0, 100 - size));
 
 export const useBannerStore = create<BannerState>((set, get) => ({
   elements: createDefaultElements(),
@@ -582,6 +827,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
   cta: createDefaultCTA(),
   projectName: 'Untitled Campaign',
   currentProjectId: null,
+  currentTemplateId: null,
   currentFolderId: null,
   lastSaved: null,
   showGallery: true,
@@ -663,6 +909,29 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     get().addElement('image', asset.src, undefined, {
       width: asset.width ?? 300,
       height: asset.height ?? 300,
+    });
+  },
+
+  replaceImageElementFromBlob: async (elementId, blob, name) => {
+    const asset = await createEditorAssetFromBlob(blob, { name });
+    set((state) => {
+      const elements = state.elements.map((element) =>
+        element.id === elementId && element.type === 'image'
+          ? {
+              ...element,
+              content: asset.src,
+              aspectRatio: asset.width && asset.height ? asset.width / asset.height : element.aspectRatio,
+            }
+          : element,
+      );
+
+      return {
+        elements,
+        editorAssets: buildNextEditorAssets(state, {
+          elements,
+          editorAssets: [...state.editorAssets, asset],
+        }),
+      };
     });
   },
 
@@ -788,6 +1057,60 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       return { overrides: nextOverrides };
     }),
 
+  clearElementOverride: (bannerId, elementId) =>
+    set((state) => {
+      const bannerOverrides = state.overrides[bannerId];
+      if (!bannerOverrides?.[elementId]) {
+        return state;
+      }
+
+      const nextBannerOverrides = { ...bannerOverrides };
+      delete nextBannerOverrides[elementId];
+
+      const nextOverrides = { ...state.overrides };
+      if (Object.keys(nextBannerOverrides).length === 0) {
+        delete nextOverrides[bannerId];
+      } else {
+        nextOverrides[bannerId] = nextBannerOverrides;
+      }
+
+      return { overrides: nextOverrides };
+    }),
+
+  createSizeException: (bannerId, elementId) =>
+    set((state) => {
+      const banner = state.bannerSizes.find((item) => item.id === bannerId);
+      const element = state.elements.find((item) => item.id === elementId);
+      if (!banner || !element || banner.isMaster) {
+        return state;
+      }
+
+      const existingOverride = state.overrides[bannerId]?.[elementId];
+      if (existingOverride && !existingOverride.isAutoPropagated) {
+        return state;
+      }
+
+      const nextOverride: Override = {
+        x: existingOverride?.x ?? element.x,
+        y: existingOverride?.y ?? element.y,
+        width: existingOverride?.width ?? element.width,
+        height: existingOverride?.height ?? element.height,
+        rotation: existingOverride?.rotation ?? element.rotation,
+        aspectRatio: existingOverride?.aspectRatio ?? element.aspectRatio,
+        isAutoPropagated: false,
+      };
+
+      return {
+        overrides: {
+          ...state.overrides,
+          [bannerId]: {
+            ...(state.overrides[bannerId] ?? {}),
+            [elementId]: nextOverride,
+          },
+        },
+      };
+    }),
+
   selectElement: (id) => set({ selectedElementId: id }),
   selectBanner: (id) => set({ selectedBannerId: id }),
   setBannerPreset: (presetId) =>
@@ -816,6 +1139,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
   setShowGallery: (show) => set({ showGallery: show }),
 
   getAllProjects: async () => listProjects(),
+  getAllTemplates: async () => listTemplates(),
   getAllFolders: async () => listFolders(),
 
   createFolder: async (name, color) => {
@@ -875,6 +1199,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     replaceEditorAssets(set, editorAssets, previousAssets);
     set({
       currentProjectId: project.id,
+      currentTemplateId: project.templateId ?? null,
       currentFolderId: project.folderId ?? null,
       projectName: project.name,
       bannerPresetId: project.bannerPresetId,
@@ -888,21 +1213,24 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       cta: project.cta,
       lastSaved: project.lastModified,
       selectedElementId: null,
-      selectedBannerId: null,
+      selectedBannerId: getPreferredBannerId(project.bannerSizes),
       isolatedBannerId: null,
       showGallery: false,
     });
   },
 
-  createNewProject: async (name, folderId) => {
+  createNewProject: async (name, folderId, bannerPresetId) => {
     const previousAssets = get().editorAssets;
+    const nextPresetId = bannerPresetId ?? defaultBannerPresetId;
+    const bannerSizes = getBannerSizesForPreset(nextPresetId);
     replaceEditorAssets(set, [], previousAssets);
     set({
       currentProjectId: null,
+      currentTemplateId: null,
       currentFolderId: folderId ?? null,
       projectName: name,
-      bannerPresetId: defaultBannerPresetId,
-      bannerSizes: getBannerSizesForPreset(defaultBannerPresetId),
+      bannerPresetId: nextPresetId,
+      bannerSizes,
       elements: createNewProjectElements(),
       overrides: {},
       background: createDefaultBackground(),
@@ -910,7 +1238,47 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       cta: createDefaultCTA(),
       lastSaved: null,
       selectedElementId: null,
-      selectedBannerId: null,
+      selectedBannerId: getPreferredBannerId(bannerSizes),
+      isolatedBannerId: null,
+      showGallery: false,
+    });
+    await get().saveCurrentProject();
+  },
+
+  createProjectFromTemplate: async (name, templateId, folderId, bannerPresetId) => {
+    const document = await getTemplateDocument(templateId);
+    if (!document) {
+      alert('Template not found');
+      return;
+    }
+
+    const { template, editorAssets } = await hydrateStoredTemplate(document);
+    const previousAssets = get().editorAssets;
+    const nextPresetId =
+      bannerPresetId && bannerPresetId === template.bannerPresetId
+        ? bannerPresetId
+        : template.bannerPresetId;
+    const nextBannerSizes = normalizeBannerSizesForPreset(
+      nextPresetId,
+      template.bannerSizes.length ? template.bannerSizes : getBannerSizesForPreset(nextPresetId),
+    );
+
+    replaceEditorAssets(set, editorAssets, previousAssets);
+    set({
+      currentProjectId: null,
+      currentTemplateId: template.id,
+      currentFolderId: folderId ?? null,
+      projectName: name,
+      bannerPresetId: nextPresetId,
+      bannerSizes: nextBannerSizes,
+      elements: template.elements,
+      overrides: template.overrides,
+      background: template.background,
+      logo: createDefaultLogo(),
+      cta: createDefaultCTA(),
+      lastSaved: null,
+      selectedElementId: null,
+      selectedBannerId: getPreferredBannerId(nextBannerSizes),
       isolatedBannerId: null,
       showGallery: false,
     });
@@ -924,6 +1292,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       replaceEditorAssets(set, [], previousAssets);
       set({
         currentProjectId: null,
+        currentTemplateId: null,
         currentFolderId: null,
         projectName: 'Untitled Campaign',
         bannerPresetId: defaultBannerPresetId,
@@ -935,7 +1304,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         cta: createDefaultCTA(),
         lastSaved: null,
         selectedElementId: null,
-        selectedBannerId: null,
+        selectedBannerId: getPreferredBannerId(getBannerSizesForPreset(defaultBannerPresetId)),
         isolatedBannerId: null,
       });
     }
@@ -956,6 +1325,70 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     }
   },
 
+  saveCurrentAsTemplate: async (name) => {
+    const state = get();
+    const templateId = state.currentTemplateId ?? `template-${Date.now()}`;
+    const { document, assets } = await serializeTemplate(state, templateId, name);
+
+    try {
+      await saveTemplateDocument(document, assets);
+      set({ currentTemplateId: templateId });
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      alert('Failed to save template. Your browser storage might be full.');
+    }
+  },
+
+  duplicateTemplate: async (id) => {
+    const source = await getTemplateDocument(id);
+    if (!source) return;
+
+    const duplicateId = `template-${Date.now()}`;
+    await duplicateTemplateRecord(id, duplicateId, `${source.name} (Copy)`);
+  },
+
+  renameTemplate: async (id, newName) => {
+    await renameTemplateRecord(id, newName);
+  },
+
+  deleteTemplate: async (id) => {
+    await deleteTemplateRecord(id);
+    if (get().currentTemplateId === id) {
+      set({ currentTemplateId: null });
+    }
+  },
+
+  applyTemplateToCurrentProject: async (templateId) => {
+    const document = await getTemplateDocument(templateId);
+    if (!document) {
+      alert('Template not found');
+      return;
+    }
+
+    const { template, editorAssets } = await hydrateStoredTemplate(document);
+    const previousAssets = get().editorAssets;
+    const state = get();
+
+    if (state.bannerPresetId !== template.bannerPresetId) {
+      alert(
+        `This template was saved for ${template.bannerPresetId}. Start a new campaign from this template or switch the campaign to the same preset before applying it.`,
+      );
+      return;
+    }
+
+    replaceEditorAssets(set, editorAssets, previousAssets);
+    set({
+      currentTemplateId: template.id,
+      elements: template.elements,
+      overrides: template.overrides,
+      background: template.background,
+      selectedElementId: null,
+      selectedBannerId: getPreferredBannerId(state.bannerSizes),
+      isolatedBannerId: null,
+    });
+    await get().saveCurrentProject();
+  },
+
   saveToLocalStorage: async () => {
     await get().saveCurrentProject();
   },
@@ -965,6 +1398,97 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     if (projects.length === 0) return false;
     const mostRecent = [...projects].sort((left, right) => right.lastModified - left.lastModified)[0];
     await get().loadProjectById(mostRecent.id);
+    return true;
+  },
+
+  copySelectedElementToClipboard: async () => {
+    const state = get();
+    if (!state.selectedElementId) {
+      return false;
+    }
+
+    const selectedElement = state.elements.find((element) => element.id === state.selectedElementId);
+    if (!selectedElement) {
+      return false;
+    }
+
+    const selectedOverride = state.selectedBannerId
+      ? state.overrides[state.selectedBannerId]?.[state.selectedElementId]
+      : undefined;
+    const effectiveElement = selectedOverride
+      ? applyPatchToElement(selectedElement, selectedOverride)
+      : selectedElement;
+    const elementWithoutId = Object.fromEntries(
+      Object.entries(effectiveElement).filter(([key]) => key !== 'id'),
+    ) as Omit<BannerElement, 'id'>;
+
+    let payload: BannerElementClipboardPayload = {
+      version: '1.0',
+      copiedAt: Date.now(),
+      sourceProjectName: state.projectName,
+      element: elementWithoutId,
+    };
+
+    if (effectiveElement.type === 'image') {
+      const linkedAsset = getAssetBySrc(state.editorAssets, effectiveElement.content);
+
+      if (linkedAsset) {
+        payload = {
+          ...payload,
+          asset: {
+            dataUrl: await blobToDataUrl(linkedAsset.blob),
+            mimeType: linkedAsset.mimeType,
+            name: linkedAsset.name,
+            width: linkedAsset.width,
+            height: linkedAsset.height,
+          },
+        };
+      } else if (isDataUrl(effectiveElement.content)) {
+        payload = {
+          ...payload,
+          asset: {
+            dataUrl: effectiveElement.content,
+          },
+        };
+      }
+    }
+
+    storeBannerElementClipboardPayload(payload);
+    return true;
+  },
+
+  pasteElementFromClipboard: async () => {
+    const payload = readBannerElementClipboardPayload();
+    if (!payload) {
+      return false;
+    }
+
+    const nextId = uuidv4();
+    let nextContent = payload.element.content;
+    let nextAsset: EditorAsset | null = null;
+
+    if (payload.element.type === 'image' && payload.asset?.dataUrl) {
+      const blob = await dataUrlToBlob(payload.asset.dataUrl);
+      nextAsset = await createEditorAssetFromBlob(blob, {
+        name: payload.asset.name,
+      });
+      nextContent = nextAsset.src;
+    }
+
+    const nextElement: BannerElement = {
+      ...payload.element,
+      id: nextId,
+      content: nextContent,
+      x: clampElementPosition(payload.element.x + CLIPBOARD_PASTE_OFFSET, payload.element.width),
+      y: clampElementPosition(payload.element.y + CLIPBOARD_PASTE_OFFSET, payload.element.height),
+    };
+
+    set((state) => ({
+      elements: [...state.elements, nextElement],
+      editorAssets: nextAsset ? [...state.editorAssets, nextAsset] : state.editorAssets,
+      selectedElementId: nextId,
+    }));
+
     return true;
   },
 
@@ -1034,6 +1558,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
               version: '2.0',
               projectName: (rawData.projectName as string) || 'Imported Campaign',
               bannerPresetId: getFallbackPresetId(rawData.bannerPresetId as string | undefined),
+              templateId: (rawData.templateId as string | null | undefined) ?? null,
               lastSaved: (rawData.lastSaved as number) || Date.now(),
               elements: (rawData.elements as PortableProjectFile['elements']) ?? [],
               overrides:
@@ -1060,6 +1585,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       replaceEditorAssets(set, hydrated.editorAssets, previousAssets);
       set({
         currentProjectId: null,
+        currentTemplateId: hydrated.templateId,
         currentFolderId: null,
         elements: hydrated.elements,
         overrides: hydrated.overrides,
@@ -1072,7 +1598,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         projectName: hydrated.projectName,
         lastSaved: hydrated.lastSaved,
         selectedElementId: null,
-        selectedBannerId: null,
+        selectedBannerId: getPreferredBannerId(hydrated.bannerSizes),
         showGallery: false,
       });
     } catch (error) {

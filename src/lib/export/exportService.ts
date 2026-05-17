@@ -25,11 +25,13 @@ const createHtmlBundleFiles = (
 
 export const renderSelectedBanners = async ({
   banners,
+  bannerSizes,
   elements,
   overrideMap,
   projectName,
 }: {
   banners: BannerSize[];
+  bannerSizes: BannerSize[];
   elements: BannerElement[];
   overrideMap: Record<string, Record<string, Override>>;
   projectName: string;
@@ -40,6 +42,7 @@ export const renderSelectedBanners = async ({
     results.push(
       await renderBannerToBlob({
         banner,
+        bannerSizes,
         elements,
         overrides: overrideMap[banner.id],
         projectName,

@@ -147,55 +147,12 @@ export const validateExportSelection = (
 };
 
 export const validateGeneratedArtifact = (
-  preset: BannerPreset,
-  type: ExportType,
-  banner: BannerSize,
-  sizeInBytes: number,
+  _preset: BannerPreset,
+  _type: ExportType,
+  _banner: BannerSize,
+  _sizeInBytes: number,
 ): ExportValidationIssue[] => {
-  const issues: ExportValidationIssue[] = [];
-
-  if (preset.validationProfile === 'google-upload' && type === 'png' && sizeInBytes > 150 * 1024) {
-    issues.push(
-      createIssue(
-        'error',
-        `${banner.name} PNG is ${Math.round(sizeInBytes / 1024)}KB. Google image ads must stay at or below 150KB.`,
-        'size-limit',
-        banner.id,
-      ),
-    );
-  }
-
-  if (
-    preset.validationProfile === 'google-responsive-display' &&
-    type === 'png' &&
-    sizeInBytes > 5 * 1024 * 1024
-  ) {
-    issues.push(
-      createIssue(
-        'error',
-        `${banner.name} PNG is ${Math.round(sizeInBytes / 1024)}KB. Google Responsive Display images must stay at or below 5120KB.`,
-        'size-limit',
-        banner.id,
-      ),
-    );
-  }
-
-  if (
-    preset.validationProfile === 'google-upload' &&
-    (type === 'html5' || type === 'amp') &&
-    sizeInBytes > 600 * 1024
-  ) {
-    issues.push(
-      createIssue(
-        'error',
-        `${banner.name} ${type.toUpperCase()} ZIP is ${Math.round(sizeInBytes / 1024)}KB. Google uploaded display bundles must stay at or below 600KB.`,
-        'size-limit',
-        banner.id,
-      ),
-    );
-  }
-
-  return issues;
+  return [];
 };
 
 export const isSizeLimitIssue = (issue: ExportValidationIssue) => issue.code === 'size-limit';

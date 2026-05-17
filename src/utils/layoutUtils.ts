@@ -1,4 +1,4 @@
-import type { BannerElement, Override } from '../store/bannerStore';
+import type { BannerCategory, BannerElement, Override } from '../store/bannerStore';
 
 export interface CalculatedLayout {
     pixelX: number;
@@ -21,7 +21,7 @@ export const calculateElementLayout = (
     overrides: Record<string, Override> | undefined,
     bannerWidth: number,
     bannerHeight: number,
-    _category: 'square' | 'horizontal' | 'vertical',
+    _category: BannerCategory,
     scale: number = 1,
     masterHeight: number = bannerHeight,
 ): CalculatedLayout => {
