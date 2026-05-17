@@ -94,7 +94,11 @@ export const ProjectGallery: React.FC = () => {
       return;
     }
 
-    void refreshLibrary();
+    const refreshHandle = window.setTimeout(() => {
+      void refreshLibrary();
+    }, 0);
+
+    return () => window.clearTimeout(refreshHandle);
   }, [refreshLibrary, showGallery]);
 
   const resetProjectDialog = () => {

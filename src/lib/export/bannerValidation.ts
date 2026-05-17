@@ -147,11 +147,9 @@ export const validateExportSelection = (
 };
 
 export const validateGeneratedArtifact = (
-  _preset: BannerPreset,
-  _type: ExportType,
-  _banner: BannerSize,
-  _sizeInBytes: number,
+  ...args: [BannerPreset, ExportType, BannerSize, number]
 ): ExportValidationIssue[] => {
+  void args;
   return [];
 };
 
