@@ -46,6 +46,11 @@ const isEditableTarget = (target: EventTarget | null) => {
   );
 };
 
+const isHistoryManagedEditableTarget = (target: EventTarget | null) => {
+  const element = target as HTMLElement | null;
+  return Boolean(element?.closest('.studio-properties-panel'));
+};
+
 export const CanvasArea: React.FC = () => {
   const bannerSizes = useBannerStore((state) => state.bannerSizes);
   const elements = useBannerStore((state) => state.elements);
@@ -60,6 +65,8 @@ export const CanvasArea: React.FC = () => {
   const pasteElementFromClipboard = useBannerStore((state) => state.pasteElementFromClipboard);
   const selectBanner = useBannerStore((state) => state.selectBanner);
   const setShowGallery = useBannerStore((state) => state.setShowGallery);
+  const undo = useBannerStore((state) => state.undo);
+  const redo = useBannerStore((state) => state.redo);
 
   const [isSpacePressed, setIsSpacePressed] = React.useState(false);
   const [isPanning, setIsPanning] = React.useState(false);
@@ -381,8 +388,26 @@ export const CanvasArea: React.FC = () => {
         setShowGallery(true);
       }
 
+      const editableTarget = isEditableTarget(event.target);
+      const allowHistoryShortcut = !editableTarget || isHistoryManagedEditableTarget(event.target);
+
+      if (allowHistoryShortcut && (event.metaKey || event.ctrlKey)) {
+        const lowerKey = event.key.toLowerCase();
+        if (lowerKey === 'z' && !event.shiftKey) {
+          event.preventDefault();
+          undo();
+          return;
+        }
+
+        if (lowerKey === 'y' || (lowerKey === 'z' && event.shiftKey)) {
+          event.preventDefault();
+          redo();
+          return;
+        }
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
-        if (isEditableTarget(event.target)) {
+        if (editableTarget) {
           return;
         }
 
@@ -413,7 +438,7 @@ export const CanvasArea: React.FC = () => {
         }
       }
 
-      if (isEditableTarget(event.target)) {
+      if (editableTarget) {
         return;
       }
 
@@ -493,10 +518,12 @@ export const CanvasArea: React.FC = () => {
     fitAll,
     focusBanner,
     pasteElementFromClipboard,
+    redo,
     removeElement,
     selectedBannerId,
     selectedElementId,
     setShowGallery,
+    undo,
   ]);
 
   React.useEffect(() => {

@@ -115,6 +115,22 @@ interface PortableProjectFile {
   assets: PortableProjectAsset[];
 }
 
+interface HistorySnapshot {
+  elements: BannerElement[];
+  overrides: Record<string, Record<string, Override>>;
+  bannerPresetId: BannerPresetId;
+  bannerSizes: BannerSize[];
+  background: BackgroundConfig;
+  isolatedBannerId: string | null;
+  logo: LogoConfig | null;
+  cta: CTAConfig | null;
+  projectName: string;
+  currentTemplateId: string | null;
+  editorAssets: EditorAsset[];
+  selectedElementId: string | null;
+  selectedBannerId: string | null;
+}
+
 interface BannerState {
   elements: BannerElement[];
   overrides: Record<string, Record<string, Override>>;
@@ -133,6 +149,9 @@ interface BannerState {
   lastSaved: number | null;
   showGallery: boolean;
   editorAssets: EditorAsset[];
+  historyPast: HistorySnapshot[];
+  historyFuture: HistorySnapshot[];
+  historyTransactionStart: HistorySnapshot | null;
   addElement: (
     type: ElementType,
     content: string,
@@ -194,6 +213,11 @@ interface BannerState {
   loadProject: (jsonString: string) => Promise<void>;
   copySelectedElementToClipboard: () => Promise<boolean>;
   pasteElementFromClipboard: () => Promise<boolean>;
+  undo: () => void;
+  redo: () => void;
+  beginHistoryTransaction: () => void;
+  commitHistoryTransaction: () => void;
+  clearHistory: () => void;
 }
 
 const revokeAssets = (assets: EditorAsset[]) => {
@@ -228,23 +252,12 @@ const collectReferencedAssetSources = ({
 
 const pruneUnusedEditorAssets = ({
   editorAssets,
-  elements,
-  background,
-  logo,
-}: Pick<BannerState, 'editorAssets' | 'elements' | 'background' | 'logo'>) => {
-  const referencedSources = collectReferencedAssetSources({ elements, background, logo });
-  const nextAssets: EditorAsset[] = [];
-
+}: Pick<BannerState, 'editorAssets'>) => {
+  const uniqueAssets = new Map<string, EditorAsset>();
   for (const asset of editorAssets) {
-    if (referencedSources.has(asset.src)) {
-      nextAssets.push(asset);
-      continue;
-    }
-
-    revokeEditorAsset(asset);
+    uniqueAssets.set(asset.id, asset);
   }
-
-  return nextAssets;
+  return [...uniqueAssets.values()];
 };
 
 const buildNextEditorAssets = (
@@ -253,9 +266,6 @@ const buildNextEditorAssets = (
 ) =>
   pruneUnusedEditorAssets({
     editorAssets: updates.editorAssets ?? state.editorAssets,
-    elements: updates.elements ?? state.elements,
-    background: updates.background ?? state.background,
-    logo: updates.logo ?? state.logo,
   });
 
 const replaceEditorAssets = (
@@ -442,6 +452,116 @@ const generateProjectThumbnail = async (state: BannerState) => {
     return undefined;
   }
 };
+
+const HISTORY_LIMIT = 80;
+
+const createHistorySnapshot = (
+  state: Pick<
+    BannerState,
+    | 'elements'
+    | 'overrides'
+    | 'bannerPresetId'
+    | 'bannerSizes'
+    | 'background'
+    | 'isolatedBannerId'
+    | 'logo'
+    | 'cta'
+    | 'projectName'
+    | 'currentTemplateId'
+    | 'editorAssets'
+    | 'selectedElementId'
+    | 'selectedBannerId'
+  >,
+): HistorySnapshot =>
+  structuredClone({
+    elements: state.elements,
+    overrides: state.overrides,
+    bannerPresetId: state.bannerPresetId,
+    bannerSizes: state.bannerSizes,
+    background: state.background,
+    isolatedBannerId: state.isolatedBannerId,
+    logo: state.logo,
+    cta: state.cta,
+    projectName: state.projectName,
+    currentTemplateId: state.currentTemplateId,
+    editorAssets: state.editorAssets,
+    selectedElementId: state.selectedElementId,
+    selectedBannerId: state.selectedBannerId,
+  });
+
+const createHistoryComparableValue = (snapshot: HistorySnapshot) =>
+  JSON.stringify({
+    elements: snapshot.elements,
+    overrides: snapshot.overrides,
+    bannerPresetId: snapshot.bannerPresetId,
+    bannerSizes: snapshot.bannerSizes,
+    background: snapshot.background,
+    isolatedBannerId: snapshot.isolatedBannerId,
+    logo: snapshot.logo,
+    cta: snapshot.cta,
+    projectName: snapshot.projectName,
+    currentTemplateId: snapshot.currentTemplateId,
+    selectedElementId: snapshot.selectedElementId,
+    selectedBannerId: snapshot.selectedBannerId,
+    editorAssets: snapshot.editorAssets.map((asset) => ({
+      id: asset.id,
+      src: asset.src,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      width: asset.width,
+      height: asset.height,
+      size: asset.blob.size,
+      type: asset.blob.type,
+    })),
+  });
+
+const historySnapshotsEqual = (left: HistorySnapshot, right: HistorySnapshot) =>
+  createHistoryComparableValue(left) === createHistoryComparableValue(right);
+
+const hasHistoryContentChange = (nextPartial: Partial<BannerState>) =>
+  nextPartial.elements !== undefined ||
+  nextPartial.overrides !== undefined ||
+  nextPartial.bannerPresetId !== undefined ||
+  nextPartial.bannerSizes !== undefined ||
+  nextPartial.background !== undefined ||
+  nextPartial.logo !== undefined ||
+  nextPartial.cta !== undefined ||
+  nextPartial.projectName !== undefined ||
+  nextPartial.currentTemplateId !== undefined ||
+  nextPartial.editorAssets !== undefined;
+
+const withHistoryEntry = (state: BannerState, nextPartial: Partial<BannerState>) => {
+  if (!hasHistoryContentChange(nextPartial)) {
+    return nextPartial;
+  }
+
+  if (state.historyTransactionStart) {
+    return nextPartial;
+  }
+
+  const nextPast = [...state.historyPast, createHistorySnapshot(state)].slice(-HISTORY_LIMIT);
+  return {
+    ...nextPartial,
+    historyPast: nextPast,
+    historyFuture: [],
+  };
+};
+
+const applyHistorySnapshot = (snapshot: HistorySnapshot): Partial<BannerState> => ({
+  elements: structuredClone(snapshot.elements),
+  overrides: structuredClone(snapshot.overrides),
+  bannerPresetId: snapshot.bannerPresetId,
+  bannerSizes: structuredClone(snapshot.bannerSizes),
+  background: structuredClone(snapshot.background),
+  isolatedBannerId: snapshot.isolatedBannerId,
+  logo: structuredClone(snapshot.logo),
+  cta: structuredClone(snapshot.cta),
+  projectName: snapshot.projectName,
+  currentTemplateId: snapshot.currentTemplateId,
+  editorAssets: structuredClone(snapshot.editorAssets),
+  selectedElementId: snapshot.selectedElementId,
+  selectedBannerId: snapshot.selectedBannerId,
+});
 
 const serializeProject = async (state: BannerState, projectId: string): Promise<{
   document: StoredProjectDocument;
@@ -832,6 +952,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
   lastSaved: null,
   showGallery: true,
   editorAssets: [],
+  historyPast: [],
+  historyFuture: [],
+  historyTransactionStart: null,
 
   addElement: (type, content, shapeType, dimensions) =>
     set((state) => {
@@ -868,7 +991,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
       }
 
-      return {
+      return withHistoryEntry(state, {
         elements: [
           ...state.elements,
           {
@@ -900,16 +1023,20 @@ export const useBannerStore = create<BannerState>((set, get) => ({
                   : {},
           },
         ],
-      };
+      });
     }),
 
   addImageElementFromBlob: async (blob, name) => {
     const asset = await createEditorAssetFromBlob(blob, { name });
-    set((state) => ({ editorAssets: [...state.editorAssets, asset] }));
+    get().beginHistoryTransaction();
+    set((state) => ({
+      editorAssets: buildNextEditorAssets(state, { editorAssets: [...state.editorAssets, asset] }),
+    }));
     get().addElement('image', asset.src, undefined, {
       width: asset.width ?? 300,
       height: asset.height ?? 300,
     });
+    get().commitHistoryTransaction();
   },
 
   replaceImageElementFromBlob: async (elementId, blob, name) => {
@@ -925,13 +1052,13 @@ export const useBannerStore = create<BannerState>((set, get) => ({
           : element,
       );
 
-      return {
+      return withHistoryEntry(state, {
         elements,
         editorAssets: buildNextEditorAssets(state, {
           elements,
           editorAssets: [...state.editorAssets, asset],
         }),
-      };
+      });
     });
   },
 
@@ -939,13 +1066,13 @@ export const useBannerStore = create<BannerState>((set, get) => ({
     const asset = await createEditorAssetFromBlob(blob, { name });
     set((state) => {
       const background = { type: 'image', value: asset.src } as BackgroundConfig;
-      return {
+      return withHistoryEntry(state, {
         background,
         editorAssets: buildNextEditorAssets(state, {
           background,
           editorAssets: [...state.editorAssets, asset],
         }),
-      };
+      });
     });
   },
 
@@ -959,22 +1086,24 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         padding: state.logo?.padding ?? 20,
       } satisfies LogoConfig;
 
-      return {
+      return withHistoryEntry(state, {
         logo,
         editorAssets: buildNextEditorAssets(state, {
           logo,
           editorAssets: [...state.editorAssets, asset],
         }),
-      };
+      });
     });
   },
 
   updateElement: (id, updates) =>
-    set((state) => ({
-      elements: state.elements.map((element) =>
-        element.id === id ? { ...element, ...updates } : element,
-      ),
-    })),
+    set((state) =>
+      withHistoryEntry(state, {
+        elements: state.elements.map((element) =>
+          element.id === id ? { ...element, ...updates } : element,
+        ),
+      }),
+    ),
 
   setOverride: (bannerId, elementId, override) =>
     set((state) => {
@@ -1021,11 +1150,11 @@ export const useBannerStore = create<BannerState>((set, get) => ({
             .filter(([, targetOverrides]) => Object.keys(targetOverrides).length > 0),
         );
 
-        return {
+        return withHistoryEntry(state, {
           elements,
           overrides: nextOverrides,
           editorAssets: buildNextEditorAssets(state, { elements }),
-        };
+        });
       }
 
       const nextOverrides = { ...state.overrides };
@@ -1038,7 +1167,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       };
 
       if (state.isolatedBannerId) {
-        return { overrides: nextOverrides };
+        return withHistoryEntry(state, { overrides: nextOverrides });
       }
 
       if (banner?.isMaster) {
@@ -1054,7 +1183,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         }
       }
 
-      return { overrides: nextOverrides };
+      return withHistoryEntry(state, { overrides: nextOverrides });
     }),
 
   clearElementOverride: (bannerId, elementId) =>
@@ -1074,7 +1203,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         nextOverrides[bannerId] = nextBannerOverrides;
       }
 
-      return { overrides: nextOverrides };
+      return withHistoryEntry(state, { overrides: nextOverrides });
     }),
 
   createSizeException: (bannerId, elementId) =>
@@ -1100,7 +1229,7 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         isAutoPropagated: false,
       };
 
-      return {
+      return withHistoryEntry(state, {
         overrides: {
           ...state.overrides,
           [bannerId]: {
@@ -1108,35 +1237,112 @@ export const useBannerStore = create<BannerState>((set, get) => ({
             [elementId]: nextOverride,
           },
         },
-      };
+      });
     }),
 
   selectElement: (id) => set({ selectedElementId: id }),
   selectBanner: (id) => set({ selectedBannerId: id }),
   setBannerPreset: (presetId) =>
-    set({
-      bannerPresetId: presetId,
-      bannerSizes: normalizeBannerSizesForPreset(presetId, getBannerSizesForPreset(presetId)),
-      selectedBannerId: null,
-      isolatedBannerId: null,
-    }),
+    set((state) =>
+      withHistoryEntry(state, {
+        bannerPresetId: presetId,
+        bannerSizes: normalizeBannerSizesForPreset(presetId, getBannerSizesForPreset(presetId)),
+        selectedBannerId: null,
+        isolatedBannerId: null,
+      }),
+    ),
   setIsolatedBanner: (bannerId) => set({ isolatedBannerId: bannerId }),
   setLogo: (logo) =>
-    set((state) => ({
-      logo,
-      editorAssets: buildNextEditorAssets(state, { logo }),
-    })),
+    set((state) =>
+      withHistoryEntry(state, {
+        logo,
+        editorAssets: buildNextEditorAssets(state, { logo }),
+      }),
+    ),
   updateLogo: (updates) =>
-    set((state) => ({
-      logo: state.logo ? { ...state.logo, ...updates } : null,
-    })),
-  setCTA: (cta) => set({ cta }),
+    set((state) =>
+      withHistoryEntry(state, {
+        logo: state.logo ? { ...state.logo, ...updates } : null,
+      }),
+    ),
+  setCTA: (cta) =>
+    set((state) =>
+      withHistoryEntry(state, {
+        cta,
+      }),
+    ),
   updateCTA: (updates) =>
-    set((state) => ({
-      cta: state.cta ? { ...state.cta, ...updates } : null,
-    })),
-  setProjectName: (name) => set({ projectName: name }),
+    set((state) =>
+      withHistoryEntry(state, {
+        cta: state.cta ? { ...state.cta, ...updates } : null,
+      }),
+    ),
+  setProjectName: (name) =>
+    set((state) =>
+      withHistoryEntry(state, {
+        projectName: name,
+      }),
+    ),
   setShowGallery: (show) => set({ showGallery: show }),
+  undo: () =>
+    set((state) => {
+      if (state.historyPast.length === 0) {
+        return state;
+      }
+
+      const previousSnapshot = state.historyPast[state.historyPast.length - 1];
+      const currentSnapshot = createHistorySnapshot(state);
+      return {
+        ...applyHistorySnapshot(previousSnapshot),
+        historyPast: state.historyPast.slice(0, -1),
+        historyFuture: [currentSnapshot, ...state.historyFuture].slice(0, HISTORY_LIMIT),
+        historyTransactionStart: null,
+      };
+    }),
+  redo: () =>
+    set((state) => {
+      if (state.historyFuture.length === 0) {
+        return state;
+      }
+
+      const nextSnapshot = state.historyFuture[0];
+      const currentSnapshot = createHistorySnapshot(state);
+      return {
+        ...applyHistorySnapshot(nextSnapshot),
+        historyPast: [...state.historyPast, currentSnapshot].slice(-HISTORY_LIMIT),
+        historyFuture: state.historyFuture.slice(1),
+        historyTransactionStart: null,
+      };
+    }),
+  beginHistoryTransaction: () =>
+    set((state) => {
+      if (state.historyTransactionStart) {
+        return state;
+      }
+
+      return {
+        historyTransactionStart: createHistorySnapshot(state),
+        historyFuture: [],
+      };
+    }),
+  commitHistoryTransaction: () =>
+    set((state) => {
+      if (!state.historyTransactionStart) {
+        return state;
+      }
+
+      const currentSnapshot = createHistorySnapshot(state);
+      if (historySnapshotsEqual(state.historyTransactionStart, currentSnapshot)) {
+        return { historyTransactionStart: null };
+      }
+
+      return {
+        historyPast: [...state.historyPast, state.historyTransactionStart].slice(-HISTORY_LIMIT),
+        historyFuture: [],
+        historyTransactionStart: null,
+      };
+    }),
+  clearHistory: () => set({ historyPast: [], historyFuture: [], historyTransactionStart: null }),
 
   getAllProjects: async () => listProjects(),
   getAllTemplates: async () => listTemplates(),
@@ -1216,6 +1422,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       selectedBannerId: getPreferredBannerId(project.bannerSizes),
       isolatedBannerId: null,
       showGallery: false,
+      historyPast: [],
+      historyFuture: [],
+      historyTransactionStart: null,
     });
   },
 
@@ -1241,6 +1450,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       selectedBannerId: getPreferredBannerId(bannerSizes),
       isolatedBannerId: null,
       showGallery: false,
+      historyPast: [],
+      historyFuture: [],
+      historyTransactionStart: null,
     });
     await get().saveCurrentProject();
   },
@@ -1281,6 +1493,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       selectedBannerId: getPreferredBannerId(nextBannerSizes),
       isolatedBannerId: null,
       showGallery: false,
+      historyPast: [],
+      historyFuture: [],
+      historyTransactionStart: null,
     });
     await get().saveCurrentProject();
   },
@@ -1306,6 +1521,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         selectedElementId: null,
         selectedBannerId: getPreferredBannerId(getBannerSizesForPreset(defaultBannerPresetId)),
         isolatedBannerId: null,
+        historyPast: [],
+        historyFuture: [],
+        historyTransactionStart: null,
       });
     }
   },
@@ -1385,6 +1603,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
       selectedElementId: null,
       selectedBannerId: getPreferredBannerId(state.bannerSizes),
       isolatedBannerId: null,
+      historyPast: [],
+      historyFuture: [],
+      historyTransactionStart: null,
     });
     await get().saveCurrentProject();
   },
@@ -1495,11 +1716,11 @@ export const useBannerStore = create<BannerState>((set, get) => ({
   removeElement: (id) =>
     set((state) => {
       const elements = state.elements.filter((element) => element.id !== id);
-      return {
+      return withHistoryEntry(state, {
         elements,
         editorAssets: buildNextEditorAssets(state, { elements }),
         selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
-      };
+      });
     }),
 
   reorderElement: (id, direction) =>
@@ -1522,14 +1743,16 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         elements.splice(index, 0, moved);
       }
 
-      return { elements };
+      return withHistoryEntry(state, { elements });
     }),
 
   setBackground: (background) =>
-    set((state) => ({
-      background,
-      editorAssets: buildNextEditorAssets(state, { background }),
-    })),
+    set((state) =>
+      withHistoryEntry(state, {
+        background,
+        editorAssets: buildNextEditorAssets(state, { background }),
+      }),
+    ),
 
   saveProject: async () => {
     const state = get();
@@ -1600,6 +1823,9 @@ export const useBannerStore = create<BannerState>((set, get) => ({
         selectedElementId: null,
         selectedBannerId: getPreferredBannerId(hydrated.bannerSizes),
         showGallery: false,
+        historyPast: [],
+        historyFuture: [],
+        historyTransactionStart: null,
       });
     } catch (error) {
       console.error('Failed to load project:', error);

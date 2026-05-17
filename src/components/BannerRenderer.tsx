@@ -39,6 +39,8 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
   const setOverride = useBannerStore((state) => state.setOverride);
   const isolatedBannerId = useBannerStore((state) => state.isolatedBannerId);
   const setIsolatedBanner = useBannerStore((state) => state.setIsolatedBanner);
+  const beginHistoryTransaction = useBannerStore((state) => state.beginHistoryTransaction);
+  const commitHistoryTransaction = useBannerStore((state) => state.commitHistoryTransaction);
 
   const background = useBannerStore((state) => state.background);
   const bannerSizes = useBannerStore((state) => state.bannerSizes);
@@ -68,6 +70,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     e.stopPropagation();
     selectElement(elementId);
     selectBanner(bannerId);
+    beginHistoryTransaction();
     setIsDragging(true);
 
     const el = elements.find(e => e.id === elementId);
@@ -83,6 +86,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     if (!isInteractive) return;
     e.preventDefault();
     e.stopPropagation();
+    beginHistoryTransaction();
     setIsResizing(true);
     const el = elements.find(e => e.id === elementId);
     if (!el) return;
@@ -119,6 +123,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
     if (!isInteractive) return;
     e.preventDefault();
     e.stopPropagation();
+    beginHistoryTransaction();
     setIsRotating(true);
     const el = elements.find(e => e.id === elementId);
     if (!el) return;
@@ -320,6 +325,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       setIsDragging(false);
       setIsResizing(false);
       setIsRotating(false);
+      commitHistoryTransaction();
     };
 
     if (isDragging || isResizing || isRotating) {
@@ -331,7 +337,7 @@ export const BannerRenderer: React.FC<BannerRendererProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isResizing, isRotating, dragStart, resizeStart, rotateStart, selectedElementId, bannerId, displayWidth, displayHeight, elements, overrides, setOverride, width, height, category, scale, masterHeight, interactionScale]);
+  }, [bannerId, category, commitHistoryTransaction, displayHeight, displayWidth, dragStart, elements, interactionScale, isDragging, isResizing, isRotating, masterHeight, overrides, resizeStart, rotateStart, scale, selectedElementId, setOverride, width, height]);
 
 
 
